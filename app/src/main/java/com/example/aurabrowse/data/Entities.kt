@@ -5,7 +5,7 @@ import androidx.room.Entity
 import androidx.room.PrimaryKey
 
 @Entity(tableName = "profiles")
-data class ProfileEntity(@PrimaryKey val id: String, val name: String, val color: Int, val icon: String, val isDefault: Boolean)
+data class ProfileEntity(@PrimaryKey val id: String, val name: String, val color: Int, val icon: String, @ColumnInfo(name = "is_default") val isDefault: Boolean)
 
 @Entity(tableName = "tab_groups")
 data class GroupEntity(@PrimaryKey val id: String, val name: String, val color: Int, @ColumnInfo(name = "profile_id") val profileId: String, @ColumnInfo(name = "is_collapsed") val isCollapsed: Boolean, val position: Int)
