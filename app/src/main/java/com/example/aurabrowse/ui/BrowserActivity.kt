@@ -56,7 +56,7 @@ class BrowserActivity : ComponentActivity() {
     } else {
         Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
             if (active.url == "about:home") {
-                HomePage(address, currentProfile, profiles.firstOrNull { it.id == currentProfile }?.name ?: "profile", Modifier.weight(1f), { address = it }, { open(it) }, { showProfiles = true }, { context.startActivity(Intent(context, SettingsActivity::class.java)) })
+                HomePage(address, Modifier.weight(1f), { address = it }, { open(it) }, { context.startActivity(Intent(context, SettingsActivity::class.java)) })
             } else {
                 Omnibox(address, { address = it }, { open(address) }, { pool.get(activeId).reload() })
                 if (progress in 1..99) LinearProgressIndicator({ progress / 100f }, Modifier.fillMaxWidth().height(1.dp))
@@ -70,11 +70,11 @@ class BrowserActivity : ComponentActivity() {
     dialogTab?.let { tab -> TabActionsDialog(tab, model, { dialogTab = null }) }
 }
 
-@Composable private fun HomePage(address: String, profile: String, profileName: String, modifier: Modifier, onAddress: (String) -> Unit, open: (String) -> Unit, profileClick: () -> Unit, settings: () -> Unit) {
+@Composable private fun HomePage(address: String, modifier: Modifier, onAddress: (String) -> Unit, open: (String) -> Unit, settings: () -> Unit) {
     Column(modifier.verticalScroll(rememberScrollState()).padding(horizontal = 14.dp)) {
         Row(Modifier.fillMaxWidth().padding(top = 18.dp, bottom = 34.dp), verticalAlignment = Alignment.CenterVertically) {
-            Surface(onClick = profileClick, shape = RoundedCornerShape(50), color = Color(0xFF071A2B), border = BorderStroke(2.dp, Color(0xFF0089FF))) { Text(profile.take(2).uppercase(), color = Color(0xFF40A9FF), modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp)) }
-            Text("AuraBrowse", style = MaterialTheme.typography.headlineSmall, modifier = Modifier.weight(1f).padding(start = 16.dp))
+            Spacer(Modifier.width(48.dp))
+            Text("AuraBrowse", style = MaterialTheme.typography.headlineSmall, modifier = Modifier.weight(1f), textAlign = androidx.compose.ui.text.style.TextAlign.Center)
             TextButton(onClick = settings) { Text("⚙", style = MaterialTheme.typography.headlineMedium) }
         }
         Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
@@ -103,28 +103,46 @@ class BrowserActivity : ComponentActivity() {
     LazyRow(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         items(tabs, key = { it.id }) { tab ->
             val gesture = Modifier.pointerInput(tab.id) { detectVerticalDragGestures(onVerticalDrag = { _, drag -> if (drag < -12) model.close(tab.id); if (drag > 12) onDialog(tab) }) }
-            Surface(onClick = { model.select(tab.id) }, shape = RoundedCornerShape(50), color = if (tab.id == activeId) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surface, border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant), modifier = gesture) { Text(if (tab.url == "about:home") "New tab" else tab.title.ifBlank { "New page" }, color = if (tab.id == activeId) Color.White else MaterialTheme.colorScheme.onSurface, maxLines = 1, modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp)) }
+            Surface(onClick = { model.select(tab.id) }, shape = RoundedCornerShape(50), color = if (tab.id == activeId) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surface, border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant), modifier = gesture.widthIn(max = 148.dp)) { Text(if (tab.url == "about:home") "New tab" else tab.title.ifBlank { "New page" }, color = if (tab.id == activeId) Color.White else MaterialTheme.colorScheme.onSurface, maxLines = 1, modifier = Modifier.padding(horizontal = 11.dp, vertical = 9.dp)) }
         }
     }
 }
 
 @Composable private fun BottomBar(activeId: String, count: Int, close: () -> Unit, tabs: () -> Unit, bookmark: () -> Unit, settings: () -> Unit) {
-    Row(Modifier.fillMaxWidth().navigationBarsPadding().padding(horizontal = 24.dp, vertical = 10.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-        Text("‹", style = MaterialTheme.typography.headlineLarge); Text("›", style = MaterialTheme.typography.headlineLarge); Surface(onClick = tabs, shape = RoundedCornerShape(14.dp), color = MaterialTheme.colorScheme.surface, border = BorderStroke(2.dp, MaterialTheme.colorScheme.onSurface), modifier = Modifier.size(48.dp)) { Box(contentAlignment = Alignment.Center) { Text(count.toString()) } }; Text("♡", style = MaterialTheme.typography.headlineLarge, modifier = Modifier.clickable { bookmark() }); Text("•••", modifier = Modifier.clickable { settings() })
+    Surface(color = MaterialTheme.colorScheme.surface, modifier = Modifier.fillMaxWidth().navigationBarsPadding().height(72.dp)) {
+        Row(Modifier.fillMaxWidth().padding(horizontal = 24.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+            Text("‹", color = MaterialTheme.colorScheme.onSurface, style = MaterialTheme.typography.headlineLarge)
+            Text("›", color = MaterialTheme.colorScheme.onSurface, style = MaterialTheme.typography.headlineLarge)
+            Surface(onClick = tabs, shape = RoundedCornerShape(14.dp), color = MaterialTheme.colorScheme.surface, border = BorderStroke(2.dp, MaterialTheme.colorScheme.onSurface), modifier = Modifier.size(46.dp)) { Box(contentAlignment = Alignment.Center) { Text(count.toString(), color = MaterialTheme.colorScheme.onSurface) } }
+            Text("♡", color = MaterialTheme.colorScheme.onSurface, style = MaterialTheme.typography.headlineLarge, modifier = Modifier.clickable { bookmark() })
+            Text("•••", color = MaterialTheme.colorScheme.onSurface, modifier = Modifier.clickable { settings() })
+        }
     }
 }
 
 @Composable private fun TabPage(tabs: List<BrowserTab>, activeId: String, model: BrowserViewModel, onBack: () -> Unit, onDialog: (BrowserTab) -> Unit) {
     val groups by model.groups.collectAsState()
+    val profiles by model.profiles.collectAsState()
+    val currentProfile by model.profileId.collectAsState()
     var showGroupDialog by remember { mutableStateOf(false) }
+    var showProfiles by remember { mutableStateOf(false) }
     Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).padding(top = 20.dp)) {
         Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp), verticalAlignment = Alignment.CenterVertically) { TextButton(onClick = onBack) { Text("‹ back") }; Text("tabs", style = MaterialTheme.typography.headlineSmall, modifier = Modifier.weight(1f)); TextButton(onClick = { model.addTab(); onBack() }) { Text("+ new") } }
         Text("tab groups", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp))
         LazyRow(Modifier.fillMaxWidth().padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) { items(groups, key = { it.id }) { group -> Surface(shape = RoundedCornerShape(50), color = MaterialTheme.colorScheme.surface, border = BorderStroke(1.dp, Color(group.color))) { Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(start = 16.dp)) { Text(group.name); TextButton(onClick = { model.deleteGroup(group) }) { Text("×") } } } }; item { Surface(onClick = { showGroupDialog = true }, shape = RoundedCornerShape(50), color = MaterialTheme.colorScheme.primaryContainer) { Text("+ new group", modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp)) } } }
         Text("tabs", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(20.dp))
-        LazyRow(Modifier.padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) { items(tabs, key = { it.id }) { tab -> Surface(onClick = { model.select(tab.id); onBack() }, shape = RoundedCornerShape(18.dp), color = if (tab.id == activeId) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface, modifier = Modifier.width(180.dp).height(130.dp)) { Column(Modifier.padding(16.dp)) { Text(tab.title); Spacer(Modifier.weight(1f)); Text(tab.url, maxLines = 2, color = MaterialTheme.colorScheme.onSurfaceVariant) } } } }
+        LazyRow(Modifier.padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) { items(tabs, key = { it.id }) { tab -> Surface(onClick = { model.select(tab.id); onBack() }, shape = RoundedCornerShape(18.dp), color = if (tab.id == activeId) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface, modifier = Modifier.width(160.dp).height(130.dp)) { Column(Modifier.padding(16.dp)) { Text(tab.title); Spacer(Modifier.weight(1f)); Text(tab.url, maxLines = 2, color = MaterialTheme.colorScheme.onSurfaceVariant) } } } }
+        Spacer(Modifier.weight(1f))
+        Text("profile", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp))
+        LazyRow(Modifier.fillMaxWidth().padding(horizontal = 16.dp).navigationBarsPadding(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            items(profiles, key = { it.id }) { profile ->
+                Surface(onClick = { model.switchProfile(profile.id); showProfiles = false }, shape = RoundedCornerShape(50), color = if (profile.id == currentProfile) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surface, border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)) { Text(profile.name, color = if (profile.id == currentProfile) Color.White else MaterialTheme.colorScheme.onSurface, maxLines = 1, modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) }
+            }
+            item { Surface(onClick = { showProfiles = true }, shape = RoundedCornerShape(50), color = MaterialTheme.colorScheme.primaryContainer) { Text("manage", modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) } }
+        }
     }
     if (showGroupDialog) NameDialog("new group", "group name", { model.addGroup(it); showGroupDialog = false }, { showGroupDialog = false })
+    if (showProfiles) ProfileSheet(model, { showProfiles = false })
 }
 
 @Composable private fun TabActionsDialog(tab: BrowserTab, model: BrowserViewModel, dismiss: () -> Unit) {
