@@ -15,7 +15,9 @@ class WebViewPool(private val context: Context, private val blocker: AdBlocker, 
             settings.javaScriptEnabled = true; settings.domStorageEnabled = true; settings.loadsImagesAutomatically = true
             settings.builtInZoomControls = false; settings.displayZoomControls = false
             settings.javaScriptCanOpenWindowsAutomatically = true; settings.setSupportMultipleWindows(false)
-            settings.userAgentString = settings.userAgentString.replace("; wv", "").replace("Version/4.0 ", "")
+            // Keep the System WebView's official UA. Spoofing it can make reCAPTCHA
+            // classify the session as inconsistent and trigger a verification loop.
+            settings.databaseEnabled = true
             CookieManager.getInstance().setAcceptCookie(true)
             CookieManager.getInstance().setAcceptThirdPartyCookies(this, true)
             webViewClient = BrowserClient(blocker, onPage); webChromeClient = BrowserChromeClient(context, onProgress)
