@@ -35,7 +35,7 @@ class SettingsActivity : ComponentActivity() {
         Spacer(Modifier.height(18.dp))
         SectionTitle("general")
         SettingRow("homepage", "AuraBrowse home", false) {}
-        SettingRow("search engine", "Google", false) {}
+        SettingRow("search engine", "DuckDuckGo (reduces CAPTCHA challenges)", false) {}
         Spacer(Modifier.height(12.dp)); SectionTitle("privacy")
         SettingRow("ad blocking", "Block known advertising and tracking domains", adblock) { adblock = it; prefs.edit().putBoolean("adblock_enabled", it).apply() }
         SettingRow("clear browsing data", "History, cookies and cache", false) {}

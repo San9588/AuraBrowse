@@ -61,7 +61,8 @@ class BrowserActivity : ComponentActivity() {
     val blocker = remember { AdBlocker(context) }
     val pool = remember { WebViewPool(context, blocker, { url, title -> model.updatePage(url, title); address = url }, { progress = it }) }
     DisposableEffect(Unit) { onDispose { pool.destroy() } }
-    val open: (String) -> Unit = { raw -> val url = raw.toDestination(); address = url; model.navigate(url); pool.get(activeId).loadUrl(url) }
+    val searchEngine = remember { context.getSharedPreferences("settings", MODE_PRIVATE).getString("search_engine", "duckduckgo") ?: "duckduckgo" }
+    val open: (String) -> Unit = { raw -> val url = raw.toDestination(searchEngine); address = url; model.navigate(url); pool.get(activeId).loadUrl(url) }
 
     if (showTabPage) {
         TabPage(tabs, activeId, model, onBack = { showTabPage = false }, onDialog = { dialogTab = it })
@@ -166,7 +167,14 @@ class BrowserActivity : ComponentActivity() {
 }
 @Composable private fun Action(label: String, click: () -> Unit) { Button(onClick = click, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(14.dp)) { Text(label, modifier = Modifier.fillMaxWidth()) } }
 
-private fun String.toDestination(): String = if (startsWith("http://") || startsWith("https://")) this else if (contains(".") && !contains(" ")) "https://$this" else "https://www.google.com/search?q=${java.net.URLEncoder.encode(this, "UTF-8") }"
+private fun String.toDestination(searchEngine: String = "duckduckgo"): String = if (startsWith("http://") || startsWith("https://")) this else if (contains(".") && !contains(" ")) "https://$this" else {
+    val query = java.net.URLEncoder.encode(this, "UTF-8")
+    when (searchEngine) {
+        "bing" -> "https://www.bing.com/search?q=$query"
+        "google" -> "https://www.google.com/search?igu=1&q=$query"
+        else -> "https://duckduckgo.com/?q=$query"
+    }
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable private fun ProfileSheet(model: BrowserViewModel, dismiss: () -> Unit) {
