@@ -7,15 +7,24 @@ import org.json.JSONObject
 import java.util.concurrent.TimeUnit
 
 /** Small CDP JSON-RPC client. WebView debugging must be enabled before connecting. */
-class CdpClient(private val onEvent: (String, JSONObject) -> Unit) {
-    private val client = OkHttpClient.Builder().readTimeout(0, TimeUnit.MILLISECONDS).build()
+class CdpClient(private val onEvent: (String, JSONObject) -> Unit, private val onState: (Boolean) -> Unit = {}) {
+    private val client = OkHttpClient.Builder()
+        .connectTimeout(5, TimeUnit.SECONDS)
+        .readTimeout(0, TimeUnit.MILLISECONDS)
+        .build()
     private val main = Handler(Looper.getMainLooper())
     private var socket: WebSocket? = null
     private var nextId = 1
     fun connect(pageSocketUrl: String) {
+        socket?.close(1000, "reconnect")
         socket = client.newWebSocket(Request.Builder().url(pageSocketUrl).build(), object : WebSocketListener() {
+            override fun onOpen(webSocket: WebSocket, response: Response) { main.post { onState(true) } }
+            override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) { main.post { onState(false) } }
+            override fun onClosed(webSocket: WebSocket, code: Int, reason: String) { main.post { onState(false) } }
             override fun onMessage(webSocket: WebSocket, text: String) {
-                runCatching { JSONObject(text) }.getOrNull()?.let { event -> event.optString("method").takeIf(String::isNotEmpty)?.let { method -> main.post { onEvent(method, event.optJSONObject("params") ?: JSONObject()) } } }
+                runCatching { JSONObject(text) }.getOrNull()?.let { event ->
+                    event.optString("method").takeIf(String::isNotEmpty)?.let { method -> main.post { onEvent(method, event.optJSONObject("params") ?: JSONObject()) } }
+                }
             }
         })
     }
@@ -23,5 +32,5 @@ class CdpClient(private val onEvent: (String, JSONObject) -> Unit) {
     fun enableRuntime() = send("Runtime.enable")
     fun evaluate(expression: String) = send("Runtime.evaluate", JSONObject().put("expression", expression).put("returnByValue", true))
     fun send(method: String, params: JSONObject = JSONObject()) { socket?.send(JSONObject().put("id", nextId++).put("method", method).put("params", params).toString()) }
-    fun close() { socket?.close(1000, "closed"); socket = null; client.dispatcher.executorService.shutdown() }
+    fun close() { socket?.close(1000, "closed"); socket = null }
 }

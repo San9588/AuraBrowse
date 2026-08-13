@@ -1,9 +1,12 @@
 package com.example.aurabrowse.ui
 
+import android.Manifest
 import android.content.Intent
+import android.os.Build
 import android.os.Bundle
 import android.webkit.WebView
 import androidx.activity.ComponentActivity
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.OnBackPressedCallback
 import androidx.activity.compose.setContent
 import androidx.activity.viewModels
@@ -24,13 +27,20 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import com.example.aurabrowse.adblock.AdBlocker
+import com.example.aurabrowse.core.Settings
 import com.example.aurabrowse.core.WebViewPool
 
 class BrowserActivity : ComponentActivity() {
     private val model by viewModels<BrowserViewModel>()
     private var visibleWebView: WebView? = null
+    private val permissionLauncher = registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { }
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        val needed = buildList {
+            if (Build.VERSION.SDK_INT >= 33) add(Manifest.permission.POST_NOTIFICATIONS)
+            if (Build.VERSION.SDK_INT < 29) add(Manifest.permission.WRITE_EXTERNAL_STORAGE)
+        }
+        if (needed.isNotEmpty()) permissionLauncher.launch(needed.toTypedArray())
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
                 val webView = visibleWebView
@@ -44,25 +54,48 @@ class BrowserActivity : ComponentActivity() {
         if (getSharedPreferences("settings", MODE_PRIVATE).getBoolean("enable_devtools", false)) WebView.setWebContentsDebuggingEnabled(true)
         setContent { AuraBrowseTheme { BrowserScreen(model) { visibleWebView = it } } }
     }
+    private var poolRef: WebViewPool? = null
+    override fun onStop() { super.onStop(); poolRef?.pause() }
+    override fun onResume() { super.onResume(); poolRef?.resume() }
 }
 
 @Composable private fun AuraBrowseTheme(content: @Composable () -> Unit) {
-    val dark = isSystemInDarkTheme()
+    val context = LocalContext.current
+    val settings = remember { Settings(context) }
+    val themePref by settings.theme.collectAsState(initial = "system")
+    val dark = when (themePref) {
+        "dark" -> true
+        "light" -> false
+        else -> isSystemInDarkTheme()
+    }
     val colors = if (dark) darkColorScheme(background = Color(0xFF0C0D0D), surface = Color(0xFF171817), primary = Color(0xFF70B8FF), onBackground = Color(0xFFF4F3F0)) else lightColorScheme(background = Color(0xFFF7F7F5), surface = Color.White, primary = Color(0xFF087EDB))
     MaterialTheme(colorScheme = colors, content = content)
 }
 
 @Composable private fun BrowserScreen(model: BrowserViewModel, onWebViewReady: (WebView) -> Unit) {
     val context = LocalContext.current
-    val tabs by model.tabs.collectAsState(); val activeId by model.activeId.collectAsState(); val active = tabs.first { it.id == activeId }
-    val profiles by model.profiles.collectAsState(); val currentProfile by model.profileId.collectAsState()
+    val tabs by model.tabs.collectAsState(); val activeId by model.activeId.collectAsState(); val active = tabs.firstOrNull { it.id == activeId } ?: tabs.first()
+    val settings = remember { Settings(context) }
+    val searchEngine by settings.searchEngine.collectAsState(initial = "google")
+    val adblockEnabled by settings.adblockEnabled.collectAsState(initial = true)
+    val devtoolsEnabled by settings.devtools.collectAsState(initial = false)
     var address by remember(activeId, active.url) { mutableStateOf(if (active.url == "about:home") "" else active.url) }
-    var progress by remember { mutableIntStateOf(0) }; var showTabPage by remember { mutableStateOf(false) }; var showProfiles by remember { mutableStateOf(false) }; var dialogTab by remember { mutableStateOf<BrowserTab?>(null) }
+    val progressByTab = remember { mutableStateMapOf<String, Int>() }
+    val progress = progressByTab[activeId] ?: 0
+    var showTabPage by remember { mutableStateOf(false) }; var showProfiles by remember { mutableStateOf(false) }; var dialogTab by remember { mutableStateOf<BrowserTab?>(null) }
     val blocker = remember { AdBlocker(context) }
-    val pool = remember { WebViewPool(context, blocker, { url, title -> model.updatePage(url, title); address = url }, { progress = it }) }
-    DisposableEffect(Unit) { onDispose { pool.destroy() } }
-    val searchEngine = remember { context.getSharedPreferences("settings", 0).getString("search_engine", "google") ?: "google" }
-    val open: (String) -> Unit = { raw -> val url = raw.toDestination(searchEngine); address = url; model.navigate(url); pool.get(activeId).loadUrl(url) }
+    LaunchedEffect(adblockEnabled) { blocker.enabled = adblockEnabled }
+    LaunchedEffect(devtoolsEnabled) { WebView.setWebContentsDebuggingEnabled(devtoolsEnabled) }
+    val pool = remember {
+        WebViewPool(context, blocker, settings, { tabId, url, title ->
+            model.updatePage(tabId, url, title)
+            if (tabId == model.activeId.value) address = url
+        }, { tabId, p -> progressByTab[tabId] = p }, { model.addTab() })
+    }
+    poolRef = pool
+    LaunchedEffect(Unit) { model.closedTabs.collect { id -> pool.close(id); progressByTab.remove(id) } }
+    DisposableEffect(Unit) { onDispose { poolRef = null; pool.destroy() } }
+    val open: (String) -> Unit = { raw -> val url = raw.toDestination(searchEngine); address = url; model.navigate(url); progressByTab[activeId] = 0; pool.load(activeId, url) }
 
     if (showTabPage) {
         TabPage(tabs, activeId, model, onBack = { showTabPage = false }, onDialog = { dialogTab = it })
@@ -73,16 +106,22 @@ class BrowserActivity : ComponentActivity() {
             } else if (active.url == "about:devtools") {
                 DevToolsScreen(Modifier.weight(1f))
             } else {
-                Omnibox(address, { address = it }, { open(address) }, { pool.get(activeId).reload() })
+                Omnibox(address, { address = it }, { open(address) }, { pool.reload(activeId) })
                 if (progress in 1..99) LinearProgressIndicator({ progress / 100f }, Modifier.fillMaxWidth().height(1.dp))
-                key(activeId) { AndroidView(factory = { pool.get(activeId).also(onWebViewReady) }, modifier = Modifier.weight(1f), update = { onWebViewReady(it); if (it.url != active.url) it.loadUrl(active.url) }) }
+                key(activeId) {
+                    AndroidView(factory = { pool.get(activeId).also(onWebViewReady) }, modifier = Modifier.weight(1f), update = { wv ->
+                        onWebViewReady(wv)
+                        val target = active.url
+                        if (!pool.hasContent(activeId) && target != "about:home" && target != "about:devtools" && target.isNotBlank()) pool.load(activeId, target)
+                    })
+                }
             }
             TabPillRow(tabs, activeId, model, onDialog = { dialogTab = it })
             BottomBar(activeId, tabs.size, { if (tabs.size > 1) model.close(activeId) }, { showTabPage = true }, { model.bookmarkActive() }, { context.startActivity(Intent(context, SettingsActivity::class.java)) })
         }
     }
     if (showProfiles) ProfileSheet(model, { showProfiles = false })
-    dialogTab?.let { tab -> TabActionsDialog(tab, model, { dialogTab = null }) }
+    dialogTab?.let { tab -> TabActionsDialog(tab, model, onRefresh = { pool.reload(tab.id) }, dismiss = { dialogTab = null }) }
 }
 
 @Composable private fun HomePage(address: String, modifier: Modifier, onAddress: (String) -> Unit, open: (String) -> Unit, settings: () -> Unit) {
@@ -159,11 +198,11 @@ class BrowserActivity : ComponentActivity() {
     if (showProfiles) ProfileSheet(model, { showProfiles = false })
 }
 
-@Composable private fun TabActionsDialog(tab: BrowserTab, model: BrowserViewModel, dismiss: () -> Unit) {
+@Composable private fun TabActionsDialog(tab: BrowserTab, model: BrowserViewModel, onRefresh: () -> Unit, dismiss: () -> Unit) {
     val context = LocalContext.current
     val groups by model.groups.collectAsState()
     var choosingGroup by remember { mutableStateOf(false) }
-    AlertDialog(onDismissRequest = dismiss, title = { Text(tab.title) }, text = { Column(verticalArrangement = Arrangement.spacedBy(8.dp)) { Action("↗  move to profile") {}; Action("□  open in profile") {}; Action("⊞  add to group") { choosingGroup = true }; if (tab.groupId != null) Action("−  remove from group") { model.assignToGroup(tab.id, null); dismiss() }; Action("⌑  pin tab") {}; Action("♧  share") {}; Action("♡  bookmark") { model.bookmarkActive(); dismiss() }; Action("⟳  refresh") {}; Action("▣  developer tools") { model.addDevToolsTab(); dismiss() }; Action("×  close tab") { model.close(tab.id); dismiss() } } }, confirmButton = { TextButton(onClick = dismiss) { Text("done") } })
+    AlertDialog(onDismissRequest = dismiss, title = { Text(tab.title) }, text = { Column(verticalArrangement = Arrangement.spacedBy(8.dp)) { Action("↗  move to profile") {}; Action("□  open in profile") {}; Action("⊞  add to group") { choosingGroup = true }; if (tab.groupId != null) Action("−  remove from group") { model.assignToGroup(tab.id, null); dismiss() }; Action("⌑  pin tab") {}; Action("♧  share") { context.startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).apply { type = "text/plain"; putExtra(Intent.EXTRA_TEXT, tab.url) }, "Share")); dismiss() }; Action("♡  bookmark") { model.bookmarkActive(); dismiss() }; Action("⟳  refresh") { onRefresh(); dismiss() }; Action("▣  developer tools") { model.addDevToolsTab(); dismiss() }; Action("×  close tab") { model.close(tab.id); dismiss() } } }, confirmButton = { TextButton(onClick = dismiss) { Text("done") } })
     if (choosingGroup) {
         AlertDialog(onDismissRequest = { choosingGroup = false }, title = { Text("add to group") }, text = { Column(verticalArrangement = Arrangement.spacedBy(6.dp)) { if (groups.isEmpty()) Text("create a group first") else groups.forEach { group -> TextButton(onClick = { model.assignToGroup(tab.id, group.id); choosingGroup = false; dismiss() }, modifier = Modifier.fillMaxWidth()) { Text(group.name, modifier = Modifier.fillMaxWidth()) } } } }, confirmButton = { TextButton(onClick = { choosingGroup = false }) { Text("cancel") } })
     }
@@ -174,8 +213,8 @@ private fun String.toDestination(searchEngine: String = "duckduckgo"): String = 
     val query = java.net.URLEncoder.encode(this, "UTF-8")
     when (searchEngine) {
         "bing" -> "https://www.bing.com/search?q=$query"
-        "google" -> "https://www.google.com/search?igu=1&q=$query"
-        else -> "https://duckduckgo.com/?q=$query"
+        "google" -> "https://www.google.com/search?q=$query"
+        else -> "https://html.duckduckgo.com/html/?q=$query"
     }
 }
 

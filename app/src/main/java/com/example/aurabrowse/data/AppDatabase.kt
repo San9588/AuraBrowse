@@ -6,6 +6,9 @@ import kotlinx.coroutines.flow.Flow
 
 @Dao interface BrowserDao {
     @Query("SELECT * FROM tabs ORDER BY position") fun tabs(): Flow<List<TabEntity>>
+    @Query("SELECT * FROM tabs ORDER BY position") suspend fun tabsSnapshot(): List<TabEntity>
+    @Query("SELECT * FROM tab_groups ORDER BY position") suspend fun groupsSnapshot(): List<GroupEntity>
+    @Query("SELECT * FROM history WHERE url = :url AND profile_id = :profileId LIMIT 1") suspend fun historyByUrl(url: String, profileId: String): HistoryEntity?
     @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun saveTab(tab: TabEntity)
     @Delete suspend fun deleteTab(tab: TabEntity)
     @Query("SELECT * FROM profiles ORDER BY is_default DESC, name") fun profiles(): Flow<List<ProfileEntity>>
@@ -18,6 +21,12 @@ import kotlinx.coroutines.flow.Flow
     @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun saveDownload(item: DownloadEntity)
     @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun saveBookmark(item: BookmarkEntity)
     @Query("SELECT * FROM bookmarks WHERE profile_id = :profileId ORDER BY timestamp DESC") fun bookmarks(profileId: String): Flow<List<BookmarkEntity>>
+    @Query("DELETE FROM history") suspend fun clearHistory()
+    @Query("DELETE FROM tabs WHERE profile_id = :profileId") suspend fun deleteTabsForProfile(profileId: String)
+    @Query("DELETE FROM tab_groups WHERE profile_id = :profileId") suspend fun deleteGroupsForProfile(profileId: String)
+    @Query("DELETE FROM history WHERE profile_id = :profileId") suspend fun deleteHistoryForProfile(profileId: String)
+    @Query("DELETE FROM bookmarks WHERE profile_id = :profileId") suspend fun deleteBookmarksForProfile(profileId: String)
+    @Query("DELETE FROM downloads WHERE profile_id = :profileId") suspend fun deleteDownloadsForProfile(profileId: String)
 }
 
 @Database(entities = [ProfileEntity::class, GroupEntity::class, TabEntity::class, HistoryEntity::class, BookmarkEntity::class, BookmarkFolderEntity::class, DownloadEntity::class], version = 2, exportSchema = false)

@@ -30,20 +30,23 @@ data class DevtoolsLog(val text: String, val detail: String = "")
     val console = remember { mutableStateListOf<DevtoolsLog>() }
     val network = remember { mutableStateListOf<DevtoolsLog>() }
     val cdp = remember {
-        CdpClient { method, params ->
-            when {
-                method == "Runtime.consoleAPICalled" -> console.add(DevtoolsLog(method, params.optString("type")))
-                method == "Runtime.exceptionThrown" -> console.add(DevtoolsLog("exception", params.toString()))
-                method == "Network.requestWillBeSent" -> network.add(DevtoolsLog("request", params.optJSONObject("request")?.optString("url", "") ?: ""))
-                method == "Network.responseReceived" -> network.add(DevtoolsLog("response", params.optJSONObject("response")?.let { "${it.optInt("status")} ${it.optString("url")}" } ?: ""))
-            }
-        }
+        CdpClient(
+            onEvent = { method, params ->
+                when {
+                    method == "Runtime.consoleAPICalled" -> console.add(DevtoolsLog(method, params.optString("type")))
+                    method == "Runtime.exceptionThrown" -> console.add(DevtoolsLog("exception", params.toString()))
+                    method == "Network.requestWillBeSent" -> network.add(DevtoolsLog("request", params.optJSONObject("request")?.optString("url", "") ?: ""))
+                    method == "Network.responseReceived" -> network.add(DevtoolsLog("response", params.optJSONObject("response")?.let { "${it.optInt("status")} ${it.optString("url")}" } ?: ""))
+                }
+            },
+            onState = { ok -> connected = ok }
+        )
     }
     DisposableEffect(Unit) { onDispose { cdp.close() } }
     Column(modifier.fillMaxSize().padding(16.dp).statusBarsPadding()) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) { Text("developer tools", style = MaterialTheme.typography.headlineSmall); Text(if (connected) "connected" else "offline", color = if (connected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant) }
         Spacer(Modifier.height(12.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) { OutlinedTextField(endpoint, { endpoint = it }, Modifier.weight(1f), singleLine = true, label = { Text("CDP WebSocket URL") }); Button(onClick = { cdp.connect(endpoint); cdp.enableRuntime(); cdp.enableNetwork(); connected = true }) { Text("connect") } }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) { OutlinedTextField(endpoint, { endpoint = it }, Modifier.weight(1f), singleLine = true, label = { Text("CDP WebSocket URL") }); Button(onClick = { connected = false; cdp.connect(endpoint); cdp.enableRuntime(); cdp.enableNetwork() }) { Text("connect") } }
         Spacer(Modifier.height(12.dp))
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) { FilterChip(selected == "console", { selected = "console" }, label = { Text("console (${console.size})") }); FilterChip(selected == "network", { selected = "network" }, label = { Text("network (${network.size})") }); TextButton(onClick = { console.clear(); network.clear() }) { Text("clear") } }
         if (selected == "console") {
