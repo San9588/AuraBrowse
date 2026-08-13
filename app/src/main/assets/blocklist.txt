@@ -1,0 +1,10 @@
+ad.doubleclick.net
+ads.google.com
+googleadservices.com
+googlesyndication.com
+adservice.google.com
+analytics.google.com
+connect.facebook.net
+pixel.facebook.com
+scorecardresearch.com
+ads.yahoo.com
