@@ -40,7 +40,7 @@ class WebAppActivity : ComponentActivity() {
             WebView(ctx).apply {
                 settings.javaScriptEnabled = true
                 settings.domStorageEnabled = true
-                settings.userAgentString = userAgentString.replace("; wv", "")
+                settings.userAgentString = settings.userAgentString.replace("; wv", "")
                 webViewClient = object : WebViewClient() {
                     override fun onPageFinished(view: WebView, currentUrl: String?) { title = view.title ?: appTitle }
                 }

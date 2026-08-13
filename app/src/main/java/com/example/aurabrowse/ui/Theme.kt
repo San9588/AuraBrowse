@@ -2,6 +2,7 @@ package com.example.aurabrowse.ui
 
 import android.os.Build
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.dynamicDarkColorScheme
 import androidx.compose.material3.dynamicLightColorScheme
@@ -10,6 +11,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.platform.LocalContext
 import com.example.aurabrowse.core.Settings
 
@@ -39,8 +41,26 @@ fun AuraBrowseTheme(content: @Composable () -> Unit) {
     val seed = AccentOptions.firstOrNull { it.id == accentPref }?.seed ?: Color(0xFF087EDB)
     val colors = when {
         accentPref == "system" && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> if (dark) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
-        dark -> dynamicDarkColorScheme(seed)
-        else -> dynamicLightColorScheme(seed)
+        dark -> accentDarkScheme(seed)
+        else -> accentLightScheme(seed)
     }
     MaterialTheme(colorScheme = colors, content = content)
 }
+
+private fun accentLightScheme(seed: Color): ColorScheme = androidx.compose.material3.lightColorScheme(
+    primary = seed,
+    onPrimary = Color.White,
+    primaryContainer = lerp(seed, Color.White, 0.82f),
+    onPrimaryContainer = lerp(seed, Color.Black, 0.35f),
+    secondary = lerp(seed, Color.Black, 0.15f),
+    tertiary = lerp(seed, Color.White, 0.3f)
+)
+
+private fun accentDarkScheme(seed: Color): ColorScheme = androidx.compose.material3.darkColorScheme(
+    primary = lerp(seed, Color.White, 0.2f),
+    onPrimary = Color.Black,
+    primaryContainer = lerp(seed, Color.Black, 0.6f),
+    onPrimaryContainer = lerp(seed, Color.White, 0.6f),
+    secondary = lerp(seed, Color.White, 0.4f),
+    tertiary = lerp(seed, Color.Black, 0.3f)
+)
