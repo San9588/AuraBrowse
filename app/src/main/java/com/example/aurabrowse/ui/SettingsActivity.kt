@@ -30,12 +30,18 @@ class SettingsActivity : ComponentActivity() {
 @Composable private fun SettingsContent(prefs: android.content.SharedPreferences, theme: String, setTheme: (String) -> Unit) {
     var adblock by remember { mutableStateOf(prefs.getBoolean("adblock_enabled", true)) }
     var devtools by remember { mutableStateOf(prefs.getBoolean("enable_devtools", false)) }
+    var searchEngine by remember { mutableStateOf(prefs.getString("search_engine", "google") ?: "google") }
     Column(Modifier.fillMaxSize().verticalScroll(androidx.compose.foundation.rememberScrollState()).padding(horizontal = 24.dp, vertical = 20.dp).statusBarsPadding(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Text("settings", style = MaterialTheme.typography.headlineSmall)
         Spacer(Modifier.height(18.dp))
         SectionTitle("general")
         SettingRow("homepage", "AuraBrowse home", false) {}
-        SettingRow("search engine", "DuckDuckGo (reduces CAPTCHA challenges)", false) {}
+        Text("search engine", style = MaterialTheme.typography.bodyLarge)
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(vertical = 8.dp)) {
+            listOf("google", "duckduckgo", "bing").forEach { value ->
+                FilterChip(selected = searchEngine == value, onClick = { searchEngine = value; prefs.edit().putString("search_engine", value).apply() }, label = { Text(value) })
+            }
+        }
         Spacer(Modifier.height(12.dp)); SectionTitle("privacy")
         SettingRow("ad blocking", "Block known advertising and tracking domains", adblock) { adblock = it; prefs.edit().putBoolean("adblock_enabled", it).apply() }
         SettingRow("clear browsing data", "History, cookies and cache", false) {}
