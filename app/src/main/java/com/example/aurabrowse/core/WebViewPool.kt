@@ -3,6 +3,7 @@ package com.example.aurabrowse.core
 import android.content.Context
 import android.os.Build
 import android.view.ViewGroup
+import android.webkit.CookieManager
 import android.webkit.WebView
 import com.example.aurabrowse.adblock.AdBlocker
 

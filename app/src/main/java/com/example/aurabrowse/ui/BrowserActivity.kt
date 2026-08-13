@@ -42,7 +42,7 @@ class BrowserActivity : ComponentActivity() {
             }
         })
         if (getSharedPreferences("settings", MODE_PRIVATE).getBoolean("enable_devtools", false)) WebView.setWebContentsDebuggingEnabled(true)
-        setContent { AuraBrowseTheme { BrowserScreen(model) } }
+        setContent { AuraBrowseTheme { BrowserScreen(model) { visibleWebView = it } } }
     }
 }
 
@@ -52,7 +52,7 @@ class BrowserActivity : ComponentActivity() {
     MaterialTheme(colorScheme = colors, content = content)
 }
 
-@Composable private fun BrowserScreen(model: BrowserViewModel) {
+@Composable private fun BrowserScreen(model: BrowserViewModel, onWebViewReady: (WebView) -> Unit) {
     val context = LocalContext.current
     val tabs by model.tabs.collectAsState(); val activeId by model.activeId.collectAsState(); val active = tabs.first { it.id == activeId }
     val profiles by model.profiles.collectAsState(); val currentProfile by model.profileId.collectAsState()
@@ -72,7 +72,7 @@ class BrowserActivity : ComponentActivity() {
             } else {
                 Omnibox(address, { address = it }, { open(address) }, { pool.get(activeId).reload() })
                 if (progress in 1..99) LinearProgressIndicator({ progress / 100f }, Modifier.fillMaxWidth().height(1.dp))
-                key(activeId) { AndroidView(factory = { pool.get(activeId).also { visibleWebView = it } }, modifier = Modifier.weight(1f), update = { visibleWebView = it; if (it.url != active.url) it.loadUrl(active.url) }) }
+                key(activeId) { AndroidView(factory = { pool.get(activeId).also(onWebViewReady) }, modifier = Modifier.weight(1f), update = { onWebViewReady(it); if (it.url != active.url) it.loadUrl(active.url) }) }
             }
             TabPillRow(tabs, activeId, model, onDialog = { dialogTab = it })
             BottomBar(activeId, tabs.size, { if (tabs.size > 1) model.close(activeId) }, { showTabPage = true }, { model.bookmarkActive() }, { context.startActivity(Intent(context, SettingsActivity::class.java)) })
