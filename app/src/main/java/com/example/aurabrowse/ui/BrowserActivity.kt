@@ -1,7 +1,12 @@
 package com.example.aurabrowse.ui
 
 import android.Manifest
+import android.content.Context
 import android.content.Intent
+import android.graphics.Bitmap
+import android.graphics.Canvas
+import android.graphics.Paint
+import android.graphics.RectF
 import android.os.Build
 import android.os.Bundle
 import android.webkit.WebView
@@ -13,6 +18,7 @@ import androidx.activity.viewModels
 import androidx.compose.foundation.*
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -32,7 +38,6 @@ import com.example.aurabrowse.core.WebViewPool
 
 class BrowserActivity : ComponentActivity() {
     private val model by viewModels<BrowserViewModel>()
-    private var visibleWebView: WebView? = null
     private val permissionLauncher = registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { }
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -43,36 +48,23 @@ class BrowserActivity : ComponentActivity() {
         if (needed.isNotEmpty()) permissionLauncher.launch(needed.toTypedArray())
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
-                val webView = visibleWebView
+                val url = model.active().url
                 when {
-                    model.active().url != "about:home" && model.active().url != "about:devtools" && webView?.canGoBack() == true -> webView.goBack()
+                    url != "about:home" && url != "about:devtools" -> model.navigate("about:home")
                     model.tabs.value.size > 1 -> model.close(model.activeId.value)
                     else -> { isEnabled = false; onBackPressedDispatcher.onBackPressed() }
                 }
             }
         })
         if (getSharedPreferences("settings", MODE_PRIVATE).getBoolean("enable_devtools", false)) WebView.setWebContentsDebuggingEnabled(true)
-        setContent { AuraBrowseTheme { BrowserScreen(model, onPoolCreated = { poolRef = it }, onPoolDisposed = { poolRef = null }) { visibleWebView = it } } }
+        setContent { AuraBrowseTheme { BrowserScreen(model, onPoolCreated = { poolRef = it }, onPoolDisposed = { poolRef = null }) } }
     }
     private var poolRef: WebViewPool? = null
     override fun onStop() { super.onStop(); poolRef?.pause() }
     override fun onResume() { super.onResume(); poolRef?.resume() }
 }
 
-@Composable private fun AuraBrowseTheme(content: @Composable () -> Unit) {
-    val context = LocalContext.current
-    val settings = remember { Settings(context) }
-    val themePref by settings.theme.collectAsState(initial = "system")
-    val dark = when (themePref) {
-        "dark" -> true
-        "light" -> false
-        else -> isSystemInDarkTheme()
-    }
-    val colors = if (dark) darkColorScheme(background = Color(0xFF0C0D0D), surface = Color(0xFF171817), primary = Color(0xFF70B8FF), onBackground = Color(0xFFF4F3F0)) else lightColorScheme(background = Color(0xFFF7F7F5), surface = Color.White, primary = Color(0xFF087EDB))
-    MaterialTheme(colorScheme = colors, content = content)
-}
-
-@Composable private fun BrowserScreen(model: BrowserViewModel, onPoolCreated: (WebViewPool) -> Unit, onPoolDisposed: () -> Unit, onWebViewReady: (WebView) -> Unit) {
+@Composable private fun BrowserScreen(model: BrowserViewModel, onPoolCreated: (WebViewPool) -> Unit, onPoolDisposed: () -> Unit) {
     val context = LocalContext.current
     val tabs by model.tabs.collectAsState(); val activeId by model.activeId.collectAsState(); val active = tabs.firstOrNull { it.id == activeId } ?: tabs.first()
     val settings = remember { Settings(context) }
@@ -108,8 +100,7 @@ class BrowserActivity : ComponentActivity() {
                 Omnibox(address, { address = it }, { open(address) }, { pool.reload(activeId) })
                 if (progress in 1..99) LinearProgressIndicator({ progress / 100f }, Modifier.fillMaxWidth().height(1.dp))
                 key(activeId) {
-                    AndroidView(factory = { pool.get(activeId).also(onWebViewReady) }, modifier = Modifier.weight(1f), update = { wv ->
-                        onWebViewReady(wv)
+                    AndroidView(factory = { pool.get(activeId) }, modifier = Modifier.weight(1f), update = { wv ->
                         val target = active.url
                         if (!pool.hasContent(activeId) && target != "about:home" && target != "about:devtools" && target.isNotBlank()) pool.load(activeId, target)
                     })
@@ -173,9 +164,12 @@ class BrowserActivity : ComponentActivity() {
 }
 
 @Composable private fun TabPage(tabs: List<BrowserTab>, activeId: String, model: BrowserViewModel, onBack: () -> Unit, onDialog: (BrowserTab) -> Unit) {
+    val context = LocalContext.current
+    val settings = remember { Settings(context) }
     val groups by model.groups.collectAsState()
     val profiles by model.profiles.collectAsState()
     val currentProfile by model.profileId.collectAsState()
+    val pagesLayout by settings.pagesLayout.collectAsState(initial = "card")
     var showGroupDialog by remember { mutableStateOf(false) }
     var showProfiles by remember { mutableStateOf(false) }
     Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).padding(top = 20.dp)) {
@@ -183,7 +177,11 @@ class BrowserActivity : ComponentActivity() {
         Text("tab groups", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp))
         LazyRow(Modifier.fillMaxWidth().padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) { items(groups, key = { it.id }) { group -> Surface(shape = RoundedCornerShape(50), color = MaterialTheme.colorScheme.surface, border = BorderStroke(1.dp, Color(group.color))) { Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(start = 16.dp)) { Text(group.name); TextButton(onClick = { model.deleteGroup(group) }) { Text("×") } } } }; item { Surface(onClick = { showGroupDialog = true }, shape = RoundedCornerShape(50), color = MaterialTheme.colorScheme.primaryContainer) { Text("+ new group", modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp)) } } }
         Text("tabs", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(20.dp))
-        LazyRow(Modifier.padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) { items(tabs, key = { it.id }) { tab -> Surface(onClick = { model.select(tab.id); onBack() }, shape = RoundedCornerShape(18.dp), color = if (tab.id == activeId) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface, modifier = Modifier.width(160.dp).height(130.dp)) { Column(Modifier.padding(16.dp)) { Text(tab.title); Spacer(Modifier.weight(1f)); Text(tab.url, maxLines = 2, color = MaterialTheme.colorScheme.onSurfaceVariant) } } } }
+        if (pagesLayout == "row") {
+            LazyColumn(Modifier.fillMaxWidth().padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) { items(tabs, key = { it.id }) { tab -> Surface(onClick = { model.select(tab.id); onBack() }, shape = RoundedCornerShape(18.dp), color = if (tab.id == activeId) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface) { Row(Modifier.padding(horizontal = 14.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) { Column(Modifier.weight(1f)) { Text(tab.title, maxLines = 1); Text(tab.url, maxLines = 1, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall) }; TextButton(onClick = { onDialog(tab) }) { Text("⊞") } } } } }
+        } else {
+            LazyRow(Modifier.padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) { items(tabs, key = { it.id }) { tab -> Surface(onClick = { model.select(tab.id); onBack() }, shape = RoundedCornerShape(18.dp), color = if (tab.id == activeId) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface, modifier = Modifier.width(160.dp).height(130.dp)) { Column(Modifier.padding(16.dp)) { Row { Text(tab.title, modifier = Modifier.weight(1f)); TextButton(onClick = { onDialog(tab) }) { Text("⊞") } }; Spacer(Modifier.weight(1f)); Text(tab.url, maxLines = 2, color = MaterialTheme.colorScheme.onSurfaceVariant) } } } }
+        }
         Spacer(Modifier.weight(1f))
         Text("profile", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp))
         LazyRow(Modifier.fillMaxWidth().padding(horizontal = 16.dp).navigationBarsPadding(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -200,13 +198,78 @@ class BrowserActivity : ComponentActivity() {
 @Composable private fun TabActionsDialog(tab: BrowserTab, model: BrowserViewModel, onRefresh: () -> Unit, dismiss: () -> Unit) {
     val context = LocalContext.current
     val groups by model.groups.collectAsState()
+    val profiles by model.profiles.collectAsState()
+    val currentProfile by model.profileId.collectAsState()
     var choosingGroup by remember { mutableStateOf(false) }
-    AlertDialog(onDismissRequest = dismiss, title = { Text(tab.title) }, text = { Column(verticalArrangement = Arrangement.spacedBy(8.dp)) { Action("↗  move to profile") {}; Action("□  open in profile") {}; Action("⊞  add to group") { choosingGroup = true }; if (tab.groupId != null) Action("−  remove from group") { model.assignToGroup(tab.id, null); dismiss() }; Action("⌑  pin tab") {}; Action("♧  share") { context.startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).apply { type = "text/plain"; putExtra(Intent.EXTRA_TEXT, tab.url) }, "Share")); dismiss() }; Action("♡  bookmark") { model.bookmarkActive(); dismiss() }; Action("⟳  refresh") { onRefresh(); dismiss() }; Action("▣  developer tools") { model.addDevToolsTab(); dismiss() }; Action("×  close tab") { model.close(tab.id); dismiss() } } }, confirmButton = { TextButton(onClick = dismiss) { Text("done") } })
+    var choosingMoveProfile by remember { mutableStateOf(false) }
+    var choosingOpenProfile by remember { mutableStateOf(false) }
+    AlertDialog(onDismissRequest = dismiss, title = { Text(tab.title) }, text = { Column(verticalArrangement = Arrangement.spacedBy(8.dp)) { Action("↗  move to profile") { choosingMoveProfile = true }; Action("□  open in profile") { choosingOpenProfile = true }; Action("⊞  add to group") { choosingGroup = true }; if (tab.groupId != null) Action("−  remove from group") { model.assignToGroup(tab.id, null); dismiss() }; Action("⌑  pin tab") {}; Action("♧  share") { context.startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).apply { type = "text/plain"; putExtra(Intent.EXTRA_TEXT, tab.url) }, "Share")); dismiss() }; Action("♡  bookmark") { model.bookmarkActive(); dismiss() }; Action("⟳  refresh") { onRefresh(); dismiss() }; Action("▣  developer tools") { model.addDevToolsTab(); dismiss() }; if (tab.url.startsWith("http")) Action("⊕  install as app") { installAsApp(context, tab); dismiss() }; Action("×  close tab") { model.close(tab.id); dismiss() } } }, confirmButton = { TextButton(onClick = dismiss) { Text("done") } })
     if (choosingGroup) {
         AlertDialog(onDismissRequest = { choosingGroup = false }, title = { Text("add to group") }, text = { Column(verticalArrangement = Arrangement.spacedBy(6.dp)) { if (groups.isEmpty()) Text("create a group first") else groups.forEach { group -> TextButton(onClick = { model.assignToGroup(tab.id, group.id); choosingGroup = false; dismiss() }, modifier = Modifier.fillMaxWidth()) { Text(group.name, modifier = Modifier.fillMaxWidth()) } } } }, confirmButton = { TextButton(onClick = { choosingGroup = false }) { Text("cancel") } })
     }
+    if (choosingMoveProfile) {
+        ProfilePickerDialog("move to profile", profiles, currentProfile, { target -> model.moveToProfile(tab.id, target); dismiss() }, { choosingMoveProfile = false })
+    }
+    if (choosingOpenProfile) {
+        ProfilePickerDialog("open in profile", profiles, currentProfile, { target -> model.openInProfile(tab.id, target); dismiss() }, { choosingOpenProfile = false })
+    }
+}
+
+@Composable private fun ProfilePickerDialog(title: String, profiles: List<com.example.aurabrowse.data.ProfileEntity>, currentProfile: String, pick: (String) -> Unit, dismiss: () -> Unit) {
+    AlertDialog(onDismissRequest = dismiss, title = { Text(title) }, text = { Column(verticalArrangement = Arrangement.spacedBy(6.dp)) { profiles.filter { it.id != currentProfile }.forEach { profile -> TextButton(onClick = { pick(profile.id) }, modifier = Modifier.fillMaxWidth()) { Text("${profile.icon}  ${profile.name}", modifier = Modifier.fillMaxWidth()) } } } }, confirmButton = { TextButton(onClick = dismiss) { Text("cancel") } })
 }
 @Composable private fun Action(label: String, click: () -> Unit) { Button(onClick = click, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(14.dp)) { Text(label, modifier = Modifier.fillMaxWidth()) } }
+
+private fun installAsApp(context: Context, tab: BrowserTab) {
+    val url = tab.url
+    val title = tab.title.ifBlank { url }
+    val icon = appIcon(title)
+    val launch = Intent(context, WebAppActivity::class.java).apply {
+        action = Intent.ACTION_VIEW
+        putExtra("url", url)
+        putExtra("title", title)
+        flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+    }
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+        val manager = context.getSystemService(Context.SHORTCUT_SERVICE) as android.content.pm.ShortcutManager
+        runCatching {
+            val shortcut = android.content.pm.ShortcutInfo.Builder(context, "webapp_${url.hashCode()}").apply {
+                setShortLabel(title.take(10))
+                setLongLabel(title)
+                setIcon(android.graphics.drawable.Icon.createWithBitmap(icon))
+                setIntent(launch)
+            }.build()
+            if (manager.isRequestPinShortcutSupported) manager.requestPinShortcut(shortcut, null)
+        }
+    } else {
+        runCatching {
+            val add = Intent("com.android.launcher.action.INSTALL_SHORTCUT").apply {
+                putExtra(Intent.EXTRA_SHORTCUT_INTENT, launch)
+                putExtra(Intent.EXTRA_SHORTCUT_NAME, title)
+                putExtra(Intent.EXTRA_SHORTCUT_ICON, icon)
+            }
+            context.sendBroadcast(add)
+        }
+    }
+}
+
+private fun appIcon(title: String): Bitmap {
+    val size = 108
+    val bitmap = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
+    val canvas = Canvas(bitmap)
+    val bg = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFF0B6BCB.toInt() }
+    canvas.drawRoundRect(RectF(0f, 0f, size.toFloat(), size.toFloat()), 24f, 24f, bg)
+    val letter = title.take(1).uppercase()
+    val text = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = android.graphics.Color.WHITE
+        textSize = 52f
+        textAlign = Paint.Align.CENTER
+        typeface = android.graphics.Typeface.DEFAULT_BOLD
+    }
+    val baseline = (size / 2f - (text.descent() + text.ascent()) / 2f)
+    canvas.drawText(letter, size / 2f, baseline, text)
+    return bitmap
+}
 
 private fun String.toDestination(searchEngine: String = "duckduckgo"): String = if (startsWith("http://") || startsWith("https://")) this else if (contains(".") && !contains(" ")) "https://$this" else {
     val query = java.net.URLEncoder.encode(this, "UTF-8")

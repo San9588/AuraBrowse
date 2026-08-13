@@ -24,3 +24,10 @@ data class BookmarkFolderEntity(@PrimaryKey val id: String, val name: String, @C
 
 @Entity(tableName = "downloads")
 data class DownloadEntity(@PrimaryKey val id: String, val url: String, val filename: String, val mimeType: String, val size: Long, val timestamp: Long, @ColumnInfo(name = "profile_id") val profileId: String = "default")
+
+@Entity(tableName = "cookies", primaryKeys = ["profile_id", "domain"])
+data class CookieEntity(
+    @ColumnInfo(name = "profile_id") val profileId: String,
+    val domain: String,
+    val value: String
+)

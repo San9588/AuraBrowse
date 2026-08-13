@@ -17,7 +17,7 @@ import org.json.JSONObject
 class DevToolsActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContent { MaterialTheme { DevToolsScreen() } }
+        setContent { AuraBrowseTheme { DevToolsScreen() } }
     }
 }
 

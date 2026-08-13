@@ -27,9 +27,13 @@ import kotlinx.coroutines.flow.Flow
     @Query("DELETE FROM history WHERE profile_id = :profileId") suspend fun deleteHistoryForProfile(profileId: String)
     @Query("DELETE FROM bookmarks WHERE profile_id = :profileId") suspend fun deleteBookmarksForProfile(profileId: String)
     @Query("DELETE FROM downloads WHERE profile_id = :profileId") suspend fun deleteDownloadsForProfile(profileId: String)
+    @Query("SELECT * FROM cookies WHERE profile_id = :profileId") suspend fun cookiesForProfile(profileId: String): List<CookieEntity>
+    @Query("SELECT DISTINCT domain FROM cookies") suspend fun cookieDomains(): List<String>
+    @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun saveCookie(cookie: CookieEntity)
+    @Query("DELETE FROM cookies WHERE profile_id = :profileId") suspend fun deleteCookiesForProfile(profileId: String)
 }
 
-@Database(entities = [ProfileEntity::class, GroupEntity::class, TabEntity::class, HistoryEntity::class, BookmarkEntity::class, BookmarkFolderEntity::class, DownloadEntity::class], version = 2, exportSchema = false)
+@Database(entities = [ProfileEntity::class, GroupEntity::class, TabEntity::class, HistoryEntity::class, BookmarkEntity::class, BookmarkFolderEntity::class, DownloadEntity::class, CookieEntity::class], version = 3, exportSchema = false)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun browserDao(): BrowserDao
     companion object { @Volatile private var instance: AppDatabase? = null

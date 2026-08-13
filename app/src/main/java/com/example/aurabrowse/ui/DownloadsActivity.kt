@@ -12,7 +12,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 
 class DownloadsActivity : ComponentActivity() {
-    override fun onCreate(savedInstanceState: Bundle?) { super.onCreate(savedInstanceState); setContent { MaterialTheme { DownloadsScreen(this) } } }
+    override fun onCreate(savedInstanceState: Bundle?) { super.onCreate(savedInstanceState);         setContent { AuraBrowseTheme { DownloadsScreen(this) } } }
 }
 @Composable private fun DownloadsScreen(context: Context) {
     val manager = remember { context.getSystemService(DownloadManager::class.java) }

@@ -32,6 +32,8 @@ class Settings(context: Context) {
     fun set(key: String, value: Boolean) { prefs.edit().putBoolean(key, value).apply() }
 
     val theme: Flow<String> = stringFlow("theme", "system")
+    val accent: Flow<String> = stringFlow("accent", "blue")
+    val pagesLayout: Flow<String> = stringFlow("pages_layout", "card")
     val adblockEnabled: Flow<Boolean> = boolFlow("adblock_enabled", true)
     val searchEngine: Flow<String> = stringFlow("search_engine", "google")
     val devtools: Flow<Boolean> = boolFlow("enable_devtools", false)

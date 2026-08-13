@@ -6,5 +6,5 @@
         <activity android:name=".ui.BrowserActivity" android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|keyboardHidden|uiMode" android:exported="true">
             <intent-filter><action android:name="android.intent.action.MAIN"/><category android:name="android.intent.category.LAUNCHER"/></intent-filter>
         </activity>
-    <activity android:name=".ui.SettingsActivity" /><activity android:name=".ui.DownloadsActivity" /><activity android:name=".ui.DevToolsActivity" /></application>
+    <activity android:name=".ui.SettingsActivity" /><activity android:name=".ui.DownloadsActivity" /><activity android:name=".ui.DevToolsActivity" /><activity android:name=".ui.WebAppActivity" android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|keyboardHidden|uiMode" android:exported="true" android:launchMode="singleTop" android:theme="@style/Theme.AuraBrowse" /></application>
 </manifest>

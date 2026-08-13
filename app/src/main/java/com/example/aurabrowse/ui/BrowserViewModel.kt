@@ -3,6 +3,7 @@ package com.example.aurabrowse.ui
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.aurabrowse.core.CookieStore
 import com.example.aurabrowse.data.*
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
@@ -12,13 +13,15 @@ data class BrowserTab(val id: String, var url: String, var title: String, val pr
 
 class BrowserViewModel(app: Application) : AndroidViewModel(app) {
     private val dao = AppDatabase.get(app).browserDao()
+    private val cookieStore = CookieStore(dao)
+    private val prefs = app.getSharedPreferences("settings", android.content.Context.MODE_PRIVATE)
     private val _tabs = MutableStateFlow<List<BrowserTab>>(listOf(BrowserTab("first", "about:home", "New tab")))
     val tabs: StateFlow<List<BrowserTab>> = _tabs.asStateFlow()
     private val _active = MutableStateFlow("first")
     val activeId: StateFlow<String> = _active.asStateFlow()
     private val _profiles = MutableStateFlow(listOf(ProfileEntity("default", "personal", 0xFF536DFE.toInt(), "●", true)))
     val profiles = _profiles.asStateFlow()
-    private val _profileId = MutableStateFlow("default")
+    private val _profileId = MutableStateFlow(prefs.getString("last_profile", "default") ?: "default")
     val profileId = _profileId.asStateFlow()
     private val _groups = MutableStateFlow<List<GroupEntity>>(emptyList())
     val groups = _groups.asStateFlow()
@@ -31,14 +34,15 @@ class BrowserViewModel(app: Application) : AndroidViewModel(app) {
             dao.profiles().collect { if (it.isNotEmpty()) _profiles.value = it }
         }
         viewModelScope.launch {
-            val saved = dao.tabsSnapshot().filter { it.profileId == "default" }
-            _groups.value = dao.groupsSnapshot().filter { it.profileId == "default" }
+            val saved = dao.tabsSnapshot().filter { it.profileId == _profileId.value }
+            _groups.value = dao.groupsSnapshot().filter { it.profileId == _profileId.value }
             if (saved.isNotEmpty()) {
                 _tabs.value = saved.map { it.toBrowserTab() }
                 _active.value = saved.first().id
             } else {
                 addTab()
             }
+            cookieStore.switchTo(_profileId.value, _profileId.value)
         }
     }
 
@@ -47,16 +51,49 @@ class BrowserViewModel(app: Application) : AndroidViewModel(app) {
 
     fun switchProfile(id: String) {
         if (id == _profileId.value) return
+        val from = _profileId.value
         _profileId.value = id
+        prefs.edit().putString("last_profile", id).apply()
+        viewModelScope.launch { loadProfile(from, id) }
+    }
+
+    fun moveToProfile(tabId: String, targetProfileId: String) {
+        val tab = _tabs.value.firstOrNull { it.id == tabId } ?: return
+        if (tab.profileId == targetProfileId) return
+        val moved = BrowserTab(UUID.randomUUID().toString(), tab.url, tab.title, targetProfileId, null, System.currentTimeMillis())
+        val from = _profileId.value
+        _profileId.value = targetProfileId
+        prefs.edit().putString("last_profile", targetProfileId).apply()
         viewModelScope.launch {
-            val saved = dao.tabsSnapshot().filter { it.profileId == id }
-            _groups.value = dao.groupsSnapshot().filter { it.profileId == id }
-            if (saved.isNotEmpty()) {
-                _tabs.value = saved.map { it.toBrowserTab() }
-                _active.value = saved.first().id
-            } else {
-                addTab()
-            }
+            dao.saveTab(moved.toEntity())
+            _closedTabs.tryEmit(tabId)
+            dao.deleteTab(tab.toEntity())
+            loadProfile(from, targetProfileId)
+        }
+    }
+
+    fun openInProfile(tabId: String, targetProfileId: String) {
+        val tab = _tabs.value.firstOrNull { it.id == tabId } ?: return
+        if (tab.profileId == targetProfileId) return
+        val opened = BrowserTab(UUID.randomUUID().toString(), tab.url, tab.title, targetProfileId, null, System.currentTimeMillis())
+        val from = _profileId.value
+        _profileId.value = targetProfileId
+        prefs.edit().putString("last_profile", targetProfileId).apply()
+        viewModelScope.launch {
+            dao.saveTab(opened.toEntity())
+            loadProfile(from, targetProfileId)
+        }
+    }
+
+    private suspend fun loadProfile(from: String?, id: String) {
+        cookieStore.switchTo(from, id)
+        val saved = dao.tabsSnapshot().filter { it.profileId == id }
+        _groups.value = dao.groupsSnapshot().filter { it.profileId == id }
+        if (saved.isNotEmpty()) {
+            _tabs.value = saved.map { it.toBrowserTab() }
+            _active.value = saved.first().id
+        } else {
+            addTab()
         }
     }
 
@@ -73,6 +110,7 @@ class BrowserViewModel(app: Application) : AndroidViewModel(app) {
             dao.deleteHistoryForProfile(profile.id)
             dao.deleteBookmarksForProfile(profile.id)
             dao.deleteDownloadsForProfile(profile.id)
+            dao.deleteCookiesForProfile(profile.id)
         }
     }
 
@@ -128,12 +166,14 @@ class BrowserViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch {
             val tab = _tabs.value.firstOrNull { it.id == tabId } ?: return@launch
             dao.saveTab(tab.toEntity())
-            if (url.startsWith("about:") || url.startsWith("data:") || url.startsWith("file:")) return@launch
-            val existing = dao.historyByUrl(url, tab.profileId)
-            if (existing != null) {
-                dao.saveHistory(existing.copy(title = cleanTitle, timestamp = System.currentTimeMillis(), visitCount = existing.visitCount + 1))
-            } else {
-                dao.saveHistory(HistoryEntity(UUID.randomUUID().toString(), url, cleanTitle, System.currentTimeMillis(), tab.profileId, 1))
+            if (!url.startsWith("about:") && !url.startsWith("data:") && !url.startsWith("file:")) {
+                cookieStore.snapshot(url, tab.profileId)
+                val existing = dao.historyByUrl(url, tab.profileId)
+                if (existing != null) {
+                    dao.saveHistory(existing.copy(title = cleanTitle, timestamp = System.currentTimeMillis(), visitCount = existing.visitCount + 1))
+                } else {
+                    dao.saveHistory(HistoryEntity(UUID.randomUUID().toString(), url, cleanTitle, System.currentTimeMillis(), tab.profileId, 1))
+                }
             }
         }
     }
