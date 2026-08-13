@@ -31,30 +31,43 @@ jobs:
             "platforms;android-35" \
             "build-tools;35.0.0"
 
-      - name: Accept Android SDK licenses
-        run: yes | sdkmanager --licenses || true
-
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.7'
 
-      - name: Show build environment
-        run: |
-          java -version
-          gradle --version
-          sdkmanager --list_installed
-
       - name: Assemble ARM64 debug APK
+        id: build
+        shell: bash
         run: |
+          set -o pipefail
+
           gradle assembleDebug \
             --no-daemon \
             --stacktrace \
-            -PabiFilter=arm64-v8a
+            --info \
+            -PabiFilter=arm64-v8a 2>&1 | tee build.log
+
+          exit ${PIPESTATUS[0]}
+
+      - name: Upload build logs and reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: aurabrowse-build-logs-${{ github.run_number }}
+          path: |
+            build.log
+            **/build/reports/**
+            **/build/test-results/**
+            **/build/outputs/logs/**
+          if-no-files-found: warn
+          retention-days: 14
 
       - name: Upload APK
+        if: success()
         uses: actions/upload-artifact@v4
         with:
           name: aurabrowse-debug-arm64
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
+          retention-days: 14
