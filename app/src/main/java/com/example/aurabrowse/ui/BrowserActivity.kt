@@ -61,7 +61,7 @@ class BrowserActivity : ComponentActivity() {
     val blocker = remember { AdBlocker(context) }
     val pool = remember { WebViewPool(context, blocker, { url, title -> model.updatePage(url, title); address = url }, { progress = it }) }
     DisposableEffect(Unit) { onDispose { pool.destroy() } }
-    val searchEngine = remember { context.getSharedPreferences("settings", MODE_PRIVATE).getString("search_engine", "google") ?: "google" }
+    val searchEngine = remember { context.getSharedPreferences("settings", 0).getString("search_engine", "google") ?: "google" }
     val open: (String) -> Unit = { raw -> val url = raw.toDestination(searchEngine); address = url; model.navigate(url); pool.get(activeId).loadUrl(url) }
 
     if (showTabPage) {
