@@ -87,7 +87,6 @@ class BrowserActivity : ComponentActivity() {
             Shortcut("Amazon", "amazon.com", open); Shortcut("YouTube", "youtube.com", open); Shortcut("Gmail", "gmail.com", open)
             Surface(onClick = { onAddress("") }, shape = RoundedCornerShape(18.dp), color = MaterialTheme.colorScheme.surface, border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant), modifier = Modifier.width(82.dp)) { Column(Modifier.padding(vertical = 12.dp).fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) { Text("+", style = MaterialTheme.typography.headlineSmall); Text("add", color = MaterialTheme.colorScheme.onSurfaceVariant) } }
         }
-        Text(profileName, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.labelMedium, modifier = Modifier.padding(top = 28.dp))
     }
 }
 
