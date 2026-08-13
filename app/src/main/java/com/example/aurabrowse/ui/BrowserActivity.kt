@@ -4,6 +4,7 @@ import android.content.Intent
 import android.os.Bundle
 import android.webkit.WebView
 import androidx.activity.ComponentActivity
+import androidx.activity.OnBackPressedCallback
 import androidx.activity.compose.setContent
 import androidx.activity.viewModels
 import androidx.compose.foundation.*
@@ -27,8 +28,19 @@ import com.example.aurabrowse.core.WebViewPool
 
 class BrowserActivity : ComponentActivity() {
     private val model by viewModels<BrowserViewModel>()
+    private var visibleWebView: WebView? = null
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
+            override fun handleOnBackPressed() {
+                val webView = visibleWebView
+                when {
+                    model.active().url != "about:home" && webView?.canGoBack() == true -> webView.goBack()
+                    model.tabs.value.size > 1 -> model.close(model.activeId.value)
+                    else -> { isEnabled = false; onBackPressedDispatcher.onBackPressed() }
+                }
+            }
+        })
         if (getSharedPreferences("settings", MODE_PRIVATE).getBoolean("enable_devtools", false)) WebView.setWebContentsDebuggingEnabled(true)
         setContent { AuraBrowseTheme { BrowserScreen(model) } }
     }
@@ -60,7 +72,7 @@ class BrowserActivity : ComponentActivity() {
             } else {
                 Omnibox(address, { address = it }, { open(address) }, { pool.get(activeId).reload() })
                 if (progress in 1..99) LinearProgressIndicator({ progress / 100f }, Modifier.fillMaxWidth().height(1.dp))
-                key(activeId) { AndroidView(factory = { pool.get(activeId) }, modifier = Modifier.weight(1f), update = { if (it.url != active.url) it.loadUrl(active.url) }) }
+                key(activeId) { AndroidView(factory = { pool.get(activeId).also { visibleWebView = it } }, modifier = Modifier.weight(1f), update = { visibleWebView = it; if (it.url != active.url) it.loadUrl(active.url) }) }
             }
             TabPillRow(tabs, activeId, model, onDialog = { dialogTab = it })
             BottomBar(activeId, tabs.size, { if (tabs.size > 1) model.close(activeId) }, { showTabPage = true }, { model.bookmarkActive() }, { context.startActivity(Intent(context, SettingsActivity::class.java)) })

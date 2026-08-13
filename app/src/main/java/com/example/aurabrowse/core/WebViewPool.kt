@@ -13,6 +13,10 @@ class WebViewPool(private val context: Context, private val blocker: AdBlocker, 
             layoutParams = ViewGroup.LayoutParams(-1, -1)
             settings.javaScriptEnabled = true; settings.domStorageEnabled = true; settings.loadsImagesAutomatically = true
             settings.builtInZoomControls = false; settings.displayZoomControls = false
+            settings.javaScriptCanOpenWindowsAutomatically = true; settings.setSupportMultipleWindows(false)
+            settings.userAgentString = settings.userAgentString.replace("; wv", "").replace("Version/4.0 ", "")
+            CookieManager.getInstance().setAcceptCookie(true)
+            CookieManager.getInstance().setAcceptThirdPartyCookies(this, true)
             webViewClient = BrowserClient(blocker, onPage); webChromeClient = BrowserChromeClient(context, onProgress)
             installDownloads(this, context)
         }
