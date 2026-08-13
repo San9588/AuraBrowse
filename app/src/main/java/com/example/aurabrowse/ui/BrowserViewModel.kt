@@ -27,6 +27,9 @@ class BrowserViewModel(app: Application) : AndroidViewModel(app) {
     fun switchProfile(id: String) { _profileId.value = id }
     fun addProfile(name: String) { val cleanName = name.trim().ifBlank { "profile ${_profiles.value.size + 1}" }; val profile = ProfileEntity(UUID.randomUUID().toString(), cleanName, 0xFF536DFE.toInt(), "●", false); _profiles.value += profile; viewModelScope.launch { dao.saveProfile(profile) } }
     fun addGroup(name: String) { val cleanName = name.trim().ifBlank { "group ${_groups.value.size + 1}" }; val group = GroupEntity(UUID.randomUUID().toString(), cleanName, 0xFF536DFE.toInt(), _profileId.value, false, _groups.value.size); _groups.value += group; viewModelScope.launch { dao.saveGroup(group) } }
+    fun deleteProfile(profile: ProfileEntity) { if (profile.isDefault || profile.id == _profileId.value) return; _profiles.value = _profiles.value.filterNot { it.id == profile.id }; viewModelScope.launch { dao.deleteProfile(profile) } }
+    fun deleteGroup(group: GroupEntity) { _groups.value = _groups.value.filterNot { it.id == group.id }; _tabs.value = _tabs.value.map { if (it.groupId == group.id) it.copy(groupId = null) else it }; viewModelScope.launch { dao.deleteGroup(group) } }
+    fun assignToGroup(tabId: String, groupId: String?) { _tabs.value = _tabs.value.map { if (it.id == tabId) it.copy(groupId = groupId) else it } }
     fun addTab(url: String = "about:home") { val tab = BrowserTab(UUID.randomUUID().toString(), url, "New tab"); _tabs.value = _tabs.value + tab; _active.value = tab.id }
     fun navigate(url: String) { _tabs.value = _tabs.value.map { if (it.id == _active.value) it.copy(url = url) else it } }
     fun close(id: String) { if (_tabs.value.size == 1) return; val remaining = _tabs.value.filterNot { it.id == id }; _tabs.value = remaining; if (_active.value == id) _active.value = remaining.last().id }
