@@ -22,7 +22,7 @@ class DevToolsActivity : ComponentActivity() {
 
 data class DevtoolsLog(val text: String, val detail: String = "")
 
-@Composable private fun DevToolsScreen() {
+@Composable fun DevToolsScreen(modifier: Modifier = Modifier) {
     var endpoint by remember { mutableStateOf("ws://127.0.0.1:9222/devtools/page/") }
     var connected by remember { mutableStateOf(false) }
     var selected by remember { mutableStateOf("console") }
@@ -40,7 +40,7 @@ data class DevtoolsLog(val text: String, val detail: String = "")
         }
     }
     DisposableEffect(Unit) { onDispose { cdp.close() } }
-    Column(Modifier.fillMaxSize().padding(16.dp).statusBarsPadding()) {
+    Column(modifier.fillMaxSize().padding(16.dp).statusBarsPadding()) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) { Text("developer tools", style = MaterialTheme.typography.headlineSmall); Text(if (connected) "connected" else "offline", color = if (connected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant) }
         Spacer(Modifier.height(12.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) { OutlinedTextField(endpoint, { endpoint = it }, Modifier.weight(1f), singleLine = true, label = { Text("CDP WebSocket URL") }); Button(onClick = { cdp.connect(endpoint); cdp.enableRuntime(); cdp.enableNetwork(); connected = true }) { Text("connect") } }

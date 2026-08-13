@@ -35,7 +35,7 @@ class BrowserActivity : ComponentActivity() {
             override fun handleOnBackPressed() {
                 val webView = visibleWebView
                 when {
-                    model.active().url != "about:home" && webView?.canGoBack() == true -> webView.goBack()
+                    model.active().url != "about:home" && model.active().url != "about:devtools" && webView?.canGoBack() == true -> webView.goBack()
                     model.tabs.value.size > 1 -> model.close(model.activeId.value)
                     else -> { isEnabled = false; onBackPressedDispatcher.onBackPressed() }
                 }
@@ -70,6 +70,8 @@ class BrowserActivity : ComponentActivity() {
         Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
             if (active.url == "about:home") {
                 HomePage(address, Modifier.weight(1f), { address = it }, { open(it) }, { context.startActivity(Intent(context, SettingsActivity::class.java)) })
+            } else if (active.url == "about:devtools") {
+                DevToolsScreen(Modifier.weight(1f))
             } else {
                 Omnibox(address, { address = it }, { open(address) }, { pool.get(activeId).reload() })
                 if (progress in 1..99) LinearProgressIndicator({ progress / 100f }, Modifier.fillMaxWidth().height(1.dp))
@@ -161,7 +163,7 @@ class BrowserActivity : ComponentActivity() {
     val context = LocalContext.current
     val groups by model.groups.collectAsState()
     var choosingGroup by remember { mutableStateOf(false) }
-    AlertDialog(onDismissRequest = dismiss, title = { Text(tab.title) }, text = { Column(verticalArrangement = Arrangement.spacedBy(8.dp)) { Action("↗  move to profile") {}; Action("□  open in profile") {}; Action("⊞  add to group") { choosingGroup = true }; if (tab.groupId != null) Action("−  remove from group") { model.assignToGroup(tab.id, null); dismiss() }; Action("⌑  pin tab") {}; Action("♧  share") {}; Action("♡  bookmark") { model.bookmarkActive(); dismiss() }; Action("⟳  refresh") {}; Action("▣  developer tools") { context.startActivity(Intent(context, DevToolsActivity::class.java)); dismiss() }; Action("×  close tab") { model.close(tab.id); dismiss() } } }, confirmButton = { TextButton(onClick = dismiss) { Text("done") } })
+    AlertDialog(onDismissRequest = dismiss, title = { Text(tab.title) }, text = { Column(verticalArrangement = Arrangement.spacedBy(8.dp)) { Action("↗  move to profile") {}; Action("□  open in profile") {}; Action("⊞  add to group") { choosingGroup = true }; if (tab.groupId != null) Action("−  remove from group") { model.assignToGroup(tab.id, null); dismiss() }; Action("⌑  pin tab") {}; Action("♧  share") {}; Action("♡  bookmark") { model.bookmarkActive(); dismiss() }; Action("⟳  refresh") {}; Action("▣  developer tools") { model.addDevToolsTab(); dismiss() }; Action("×  close tab") { model.close(tab.id); dismiss() } } }, confirmButton = { TextButton(onClick = dismiss) { Text("done") } })
     if (choosingGroup) {
         AlertDialog(onDismissRequest = { choosingGroup = false }, title = { Text("add to group") }, text = { Column(verticalArrangement = Arrangement.spacedBy(6.dp)) { if (groups.isEmpty()) Text("create a group first") else groups.forEach { group -> TextButton(onClick = { model.assignToGroup(tab.id, group.id); choosingGroup = false; dismiss() }, modifier = Modifier.fillMaxWidth()) { Text(group.name, modifier = Modifier.fillMaxWidth()) } } } }, confirmButton = { TextButton(onClick = { choosingGroup = false }) { Text("cancel") } })
     }

@@ -31,6 +31,7 @@ class BrowserViewModel(app: Application) : AndroidViewModel(app) {
     fun deleteGroup(group: GroupEntity) { _groups.value = _groups.value.filterNot { it.id == group.id }; _tabs.value = _tabs.value.map { if (it.groupId == group.id) it.copy(groupId = null) else it }; viewModelScope.launch { dao.deleteGroup(group) } }
     fun assignToGroup(tabId: String, groupId: String?) { _tabs.value = _tabs.value.map { if (it.id == tabId) it.copy(groupId = groupId) else it } }
     fun addTab(url: String = "about:home") { val tab = BrowserTab(UUID.randomUUID().toString(), url, "New tab"); _tabs.value = _tabs.value + tab; _active.value = tab.id }
+    fun addDevToolsTab() { val tab = BrowserTab(UUID.randomUUID().toString(), "about:devtools", "Developer tools"); _tabs.value = _tabs.value + tab; _active.value = tab.id }
     fun navigate(url: String) { _tabs.value = _tabs.value.map { if (it.id == _active.value) it.copy(url = url) else it } }
     fun close(id: String) { if (_tabs.value.size == 1) return; val remaining = _tabs.value.filterNot { it.id == id }; _tabs.value = remaining; if (_active.value == id) _active.value = remaining.last().id }
     fun updatePage(url: String, title: String) { _tabs.value = _tabs.value.map { if (it.id == _active.value) it.copy(url = url, title = title.ifBlank { url }) else it }; viewModelScope.launch { dao.saveHistory(HistoryEntity(UUID.randomUUID().toString(), url, title.ifBlank { url }, System.currentTimeMillis(), _profileId.value, 1)) } }
