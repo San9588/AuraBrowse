@@ -52,8 +52,6 @@ class WebViewPool(
     private fun WebView.release() {
         (parent as? ViewGroup)?.removeView(this)
         stopLoading()
-        webChromeClient = null
-        webViewClient = null
         loadUrl("about:blank")
         destroy()
     }

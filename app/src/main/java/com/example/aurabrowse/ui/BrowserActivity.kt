@@ -52,7 +52,7 @@ class BrowserActivity : ComponentActivity() {
             }
         })
         if (getSharedPreferences("settings", MODE_PRIVATE).getBoolean("enable_devtools", false)) WebView.setWebContentsDebuggingEnabled(true)
-        setContent { AuraBrowseTheme { BrowserScreen(model) { visibleWebView = it } } }
+        setContent { AuraBrowseTheme { BrowserScreen(model, onPoolCreated = { poolRef = it }, onPoolDisposed = { poolRef = null }) { visibleWebView = it } } }
     }
     private var poolRef: WebViewPool? = null
     override fun onStop() { super.onStop(); poolRef?.pause() }
@@ -72,7 +72,7 @@ class BrowserActivity : ComponentActivity() {
     MaterialTheme(colorScheme = colors, content = content)
 }
 
-@Composable private fun BrowserScreen(model: BrowserViewModel, onWebViewReady: (WebView) -> Unit) {
+@Composable private fun BrowserScreen(model: BrowserViewModel, onPoolCreated: (WebViewPool) -> Unit, onPoolDisposed: () -> Unit, onWebViewReady: (WebView) -> Unit) {
     val context = LocalContext.current
     val tabs by model.tabs.collectAsState(); val activeId by model.activeId.collectAsState(); val active = tabs.firstOrNull { it.id == activeId } ?: tabs.first()
     val settings = remember { Settings(context) }
@@ -90,11 +90,10 @@ class BrowserActivity : ComponentActivity() {
         WebViewPool(context, blocker, settings, { tabId, url, title ->
             model.updatePage(tabId, url, title)
             if (tabId == model.activeId.value) address = url
-        }, { tabId, p -> progressByTab[tabId] = p }, { model.addTab() })
+        }, { tabId, p -> progressByTab[tabId] = p }, { model.addTab() }).also(onPoolCreated)
     }
-    poolRef = pool
     LaunchedEffect(Unit) { model.closedTabs.collect { id -> pool.close(id); progressByTab.remove(id) } }
-    DisposableEffect(Unit) { onDispose { poolRef = null; pool.destroy() } }
+    DisposableEffect(Unit) { onDispose { onPoolDisposed(); pool.destroy() } }
     val open: (String) -> Unit = { raw -> val url = raw.toDestination(searchEngine); address = url; model.navigate(url); progressByTab[activeId] = 0; pool.load(activeId, url) }
 
     if (showTabPage) {

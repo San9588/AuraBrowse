@@ -13,7 +13,7 @@ class Settings(context: Context) {
     private val changes = MutableSharedFlow<String>(extraBufferCapacity = 16)
 
     init {
-        prefs.registerOnSharedPreferenceChangeListener { _, key -> changes.tryEmit(key) }
+        prefs.registerOnSharedPreferenceChangeListener { _, key -> key?.let { changes.tryEmit(it) } }
     }
 
     fun stringFlow(key: String, default: String): Flow<String> = changes

@@ -2,7 +2,6 @@ package com.example.aurabrowse.ui
 
 import android.os.Bundle
 import android.webkit.CookieManager
-import android.webkit.WebView
 import android.webkit.WebViewDatabase
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -53,7 +52,6 @@ class SettingsActivity : ComponentActivity() {
                 CookieManager.getInstance().removeAllCookies(null)
                 CookieManager.getInstance().flush()
                 WebViewDatabase.getInstance(context).clearFormData()
-                WebView.clearCache(true)
                 scope.launch { AppDatabase.get(context).browserDao().clearHistory() }
             }
             Spacer(Modifier.height(12.dp)); SectionTitle("appearance")
