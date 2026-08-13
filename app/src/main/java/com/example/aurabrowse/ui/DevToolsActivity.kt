@@ -1,6 +1,8 @@
 package com.example.aurabrowse.ui
 
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.*
@@ -23,11 +25,14 @@ class DevToolsActivity : ComponentActivity() {
 
 data class DevtoolsLog(val text: String, val detail: String = "")
 
+private val mainHandler = Handler(Looper.getMainLooper())
+
 @Composable fun DevToolsScreen(modifier: Modifier = Modifier) {
     var connected by remember { mutableStateOf(false) }
     var selected by remember { mutableStateOf("console") }
     var expression by remember { mutableStateOf("") }
     var pageTitle by remember { mutableStateOf("") }
+    var status by remember { mutableStateOf("offline") }
     val console = remember { mutableStateListOf<DevtoolsLog>() }
     val network = remember { mutableStateListOf<DevtoolsLog>() }
     val cdp = remember {
@@ -40,23 +45,34 @@ data class DevtoolsLog(val text: String, val detail: String = "")
                     method == "Network.responseReceived" -> network.add(DevtoolsLog("response", params.optJSONObject("response")?.let { "${it.optInt("status")} ${it.optString("url")}" } ?: ""))
                 }
             },
-            onState = { ok -> connected = ok }
+            onState = { ok -> connected = ok; status = if (ok) "connected" else "offline" }
         )
     }
-    DisposableEffect(Unit) { onDispose { cdp.close() } }
-    Column(modifier.fillMaxSize().padding(16.dp).statusBarsPadding()) {
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) { Text("developer tools", style = MaterialTheme.typography.headlineSmall); Text(if (connected) "connected" else "offline", color = if (connected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant) }
-        Spacer(Modifier.height(12.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            OutlinedButton(onClick = {
-                val pages = cdp.listPages()
-                val first = pages.firstOrNull()
+    fun doConnect() {
+        Thread({
+            val pages = cdp.listPages()
+            val first = pages.firstOrNull()
+            mainHandler.post {
                 if (first != null) {
                     pageTitle = first.title.ifBlank { first.url }
-                    connected = false
+                    status = "connecting…"
                     cdp.connect(first.wsUrl)
-                } else pageTitle = "no debuggable page"
-            }) { Text("connect") }
+                } else {
+                    pageTitle = "no debuggable page"
+                    status = "offline (enable dev tools in settings, then restart app)"
+                }
+            }
+        }, "cdp-list").start()
+    }
+    DisposableEffect(Unit) {
+        doConnect()
+        onDispose { cdp.close() }
+    }
+    Column(modifier.fillMaxSize().padding(16.dp).statusBarsPadding()) {
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) { Text("developer tools", style = MaterialTheme.typography.headlineSmall); Text(status, color = if (connected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant) }
+        Spacer(Modifier.height(12.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            OutlinedButton(onClick = { doConnect() }) { Text("connect") }
             Text(pageTitle, modifier = Modifier.align(Alignment.CenterVertically).weight(1f), maxLines = 1)
         }
         Spacer(Modifier.height(12.dp))

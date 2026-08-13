@@ -7,6 +7,7 @@ import android.os.Handler
 import android.os.Looper
 import android.os.Process
 import android.util.Base64
+import android.util.Log
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.ByteArrayOutputStream
@@ -37,13 +38,18 @@ class CdpClient(
     @Volatile private var connected = false
     private var nextId = 1
 
+    companion object {
+        private const val TAG = "AuraCdp"
+    }
+
     fun connect(wsUrl: String? = null) {
         close()
         val g = gen.incrementAndGet()
         Thread({
             try {
                 val target = wsUrl ?: discoverDefaultWsUrl()
-                if (target.isNullOrBlank()) throw IOException("no debuggable page")
+                if (target.isNullOrBlank()) throw IOException("no debuggable page (is WebView debugging enabled?)")
+                Log.d(TAG, "connect target=$target")
                 val sock = openSocket()
                 val (input, output) = websocketUpgrade(sock, target)
                 socket = sock
@@ -53,6 +59,7 @@ class CdpClient(
                 enableDomains()
                 readLoop(sock, input, g)
             } catch (e: Exception) {
+                Log.e(TAG, "connect failed: ${e.message}", e)
                 runCatching { socket?.close() }
                 if (g == gen.get()) {
                     socket = null
@@ -79,14 +86,16 @@ class CdpClient(
 
     fun listPages(): List<CdpPage> = runCatching {
         openSocket().use { sock ->
+            Log.d(TAG, "listPages connected")
             val body = httpGet(sock, "/json")
+            Log.d(TAG, "listPages body len=${body.length}")
             val arr = JSONArray(body)
             (0 until arr.length()).map { i ->
                 val p = arr.getJSONObject(i)
                 CdpPage(p.optString("id"), p.optString("title"), p.optString("url"), p.optString("webSocketDebuggerUrl"))
             }
         }
-    }.getOrDefault(emptyList())
+    }.onFailure { Log.e(TAG, "listPages failed: ${it.message}", it) }.getOrDefault(emptyList())
 
     fun close() {
         gen.incrementAndGet()
@@ -150,8 +159,10 @@ class CdpClient(
         var last: IOException? = null
         for (name in names) {
             try {
+                Log.d(TAG, "trying socket $name")
                 val sock = LocalSocket()
                 sock.connect(LocalSocketAddress(name, LocalSocketAddress.Namespace.ABSTRACT))
+                Log.d(TAG, "connected to $name")
                 return sock
             } catch (e: IOException) {
                 last = e
