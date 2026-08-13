@@ -9,7 +9,9 @@ permissions:
 jobs:
   build:
     name: Build AuraBrowse APK
-    runs-on: ubuntu-24.04-arm
+
+    # Build ARM64 APK on the standard x64 GitHub runner.
+    runs-on: ubuntu-latest
 
     steps:
       - name: Checkout source
@@ -24,17 +26,20 @@ jobs:
 
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
-
-      - name: Install Android SDK components
-        run: |
-          sdkmanager "platform-tools" \
-            "platforms;android-35" \
-            "build-tools;35.0.0"
+        with:
+          packages: 'platform-tools platforms;android-35 build-tools;35.0.0'
+          accept-android-sdk-licenses: true
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.7'
+
+      - name: Show build environment
+        run: |
+          java -version
+          gradle --version
+          echo "ANDROID_HOME=$ANDROID_HOME"
 
       - name: Assemble ARM64 debug APK
         id: build
