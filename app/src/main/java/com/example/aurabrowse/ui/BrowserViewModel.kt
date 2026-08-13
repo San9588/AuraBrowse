@@ -19,11 +19,14 @@ class BrowserViewModel(app: Application) : AndroidViewModel(app) {
     val profiles = _profiles.asStateFlow()
     private val _profileId = MutableStateFlow("default")
     val profileId = _profileId.asStateFlow()
+    private val _groups = MutableStateFlow<List<GroupEntity>>(emptyList())
+    val groups = _groups.asStateFlow()
     init { viewModelScope.launch { dao.saveProfile(_profiles.value.first()); dao.profiles().collect { if (it.isNotEmpty()) _profiles.value = it } } }
     fun active() = _tabs.value.first { it.id == _active.value }
     fun select(id: String) { _active.value = id }
     fun switchProfile(id: String) { _profileId.value = id }
-    fun addProfile() { val profile = ProfileEntity(UUID.randomUUID().toString(), "profile ${_profiles.value.size + 1}", 0xFF536DFE.toInt(), "●", false); _profiles.value += profile; viewModelScope.launch { dao.saveProfile(profile) } }
+    fun addProfile(name: String) { val cleanName = name.trim().ifBlank { "profile ${_profiles.value.size + 1}" }; val profile = ProfileEntity(UUID.randomUUID().toString(), cleanName, 0xFF536DFE.toInt(), "●", false); _profiles.value += profile; viewModelScope.launch { dao.saveProfile(profile) } }
+    fun addGroup(name: String) { val cleanName = name.trim().ifBlank { "group ${_groups.value.size + 1}" }; val group = GroupEntity(UUID.randomUUID().toString(), cleanName, 0xFF536DFE.toInt(), _profileId.value, false, _groups.value.size); _groups.value += group; viewModelScope.launch { dao.saveGroup(group) } }
     fun addTab(url: String = "about:home") { val tab = BrowserTab(UUID.randomUUID().toString(), url, "New tab"); _tabs.value = _tabs.value + tab; _active.value = tab.id }
     fun navigate(url: String) { _tabs.value = _tabs.value.map { if (it.id == _active.value) it.copy(url = url) else it } }
     fun close(id: String) { if (_tabs.value.size == 1) return; val remaining = _tabs.value.filterNot { it.id == id }; _tabs.value = remaining; if (_active.value == id) _active.value = remaining.last().id }

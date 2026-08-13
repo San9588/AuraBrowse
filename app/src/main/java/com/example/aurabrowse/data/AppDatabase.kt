@@ -10,6 +10,7 @@ import kotlinx.coroutines.flow.Flow
     @Delete suspend fun deleteTab(tab: TabEntity)
     @Query("SELECT * FROM profiles ORDER BY is_default DESC, name") fun profiles(): Flow<List<ProfileEntity>>
     @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun saveProfile(profile: ProfileEntity)
+    @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun saveGroup(group: GroupEntity)
     @Delete suspend fun deleteProfile(profile: ProfileEntity)
     @Query("SELECT * FROM history ORDER BY timestamp DESC LIMIT 1000") fun history(): Flow<List<HistoryEntity>>
     @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun saveHistory(item: HistoryEntity)

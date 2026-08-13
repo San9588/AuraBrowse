@@ -45,7 +45,7 @@ class BrowserActivity : ComponentActivity() {
     val tabs by model.tabs.collectAsState(); val activeId by model.activeId.collectAsState(); val active = tabs.first { it.id == activeId }
     val profiles by model.profiles.collectAsState(); val currentProfile by model.profileId.collectAsState()
     var address by remember(activeId, active.url) { mutableStateOf(if (active.url == "about:home") "" else active.url) }
-    var progress by remember { mutableIntStateOf(0) }; var showTabPage by remember { mutableStateOf(false) }; var dialogTab by remember { mutableStateOf<BrowserTab?>(null) }
+    var progress by remember { mutableIntStateOf(0) }; var showTabPage by remember { mutableStateOf(false) }; var showProfiles by remember { mutableStateOf(false) }; var dialogTab by remember { mutableStateOf<BrowserTab?>(null) }
     val blocker = remember { AdBlocker(context) }
     val pool = remember { WebViewPool(context, blocker, { url, title -> model.updatePage(url, title); address = url }, { progress = it }) }
     DisposableEffect(Unit) { onDispose { pool.destroy() } }
@@ -56,7 +56,7 @@ class BrowserActivity : ComponentActivity() {
     } else {
         Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
             if (active.url == "about:home") {
-                HomePage(address, currentProfile, profiles.firstOrNull { it.id == currentProfile }?.name ?: "profile", Modifier.weight(1f), { address = it }, { open(it) }, { context.startActivity(Intent(context, SettingsActivity::class.java)) })
+                HomePage(address, currentProfile, profiles.firstOrNull { it.id == currentProfile }?.name ?: "profile", Modifier.weight(1f), { address = it }, { open(it) }, { showProfiles = true }, { context.startActivity(Intent(context, SettingsActivity::class.java)) })
             } else {
                 Omnibox(address, { address = it }, { open(address) }, { pool.get(activeId).reload() })
                 if (progress in 1..99) LinearProgressIndicator({ progress / 100f }, Modifier.fillMaxWidth().height(1.dp))
@@ -66,13 +66,14 @@ class BrowserActivity : ComponentActivity() {
             BottomBar(activeId, tabs.size, { if (tabs.size > 1) model.close(activeId) }, { showTabPage = true }, { model.bookmarkActive() }, { context.startActivity(Intent(context, SettingsActivity::class.java)) })
         }
     }
+    if (showProfiles) ProfileSheet(model, { showProfiles = false })
     dialogTab?.let { tab -> TabActionsDialog(tab, model, { dialogTab = null }) }
 }
 
-@Composable private fun HomePage(address: String, profile: String, profileName: String, modifier: Modifier, onAddress: (String) -> Unit, open: (String) -> Unit, settings: () -> Unit) {
+@Composable private fun HomePage(address: String, profile: String, profileName: String, modifier: Modifier, onAddress: (String) -> Unit, open: (String) -> Unit, profileClick: () -> Unit, settings: () -> Unit) {
     Column(modifier.verticalScroll(rememberScrollState()).padding(horizontal = 14.dp)) {
         Row(Modifier.fillMaxWidth().padding(top = 18.dp, bottom = 34.dp), verticalAlignment = Alignment.CenterVertically) {
-            Surface(shape = RoundedCornerShape(50), color = Color(0xFF071A2B), border = BorderStroke(2.dp, Color(0xFF0089FF))) { Text(profile.take(2).uppercase(), color = Color(0xFF40A9FF), modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp)) }
+            Surface(onClick = profileClick, shape = RoundedCornerShape(50), color = Color(0xFF071A2B), border = BorderStroke(2.dp, Color(0xFF0089FF))) { Text(profile.take(2).uppercase(), color = Color(0xFF40A9FF), modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp)) }
             Text("AuraBrowse", style = MaterialTheme.typography.headlineSmall, modifier = Modifier.weight(1f).padding(start = 16.dp))
             TextButton(onClick = settings) { Text("⚙", style = MaterialTheme.typography.headlineMedium) }
         }
@@ -114,7 +115,16 @@ class BrowserActivity : ComponentActivity() {
 }
 
 @Composable private fun TabPage(tabs: List<BrowserTab>, activeId: String, model: BrowserViewModel, onBack: () -> Unit, onDialog: (BrowserTab) -> Unit) {
-    Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).padding(top = 20.dp)) { Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp), verticalAlignment = Alignment.CenterVertically) { TextButton(onClick = onBack) { Text("‹ back") }; Text("tabs", style = MaterialTheme.typography.headlineSmall, modifier = Modifier.weight(1f)); TextButton(onClick = { model.addTab(); onBack() }) { Text("+ new") } }; LazyRow(Modifier.padding(16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) { items(tabs, key = { it.id }) { tab -> Surface(onClick = { model.select(tab.id); onBack() }, shape = RoundedCornerShape(18.dp), color = if (tab.id == activeId) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface, modifier = Modifier.width(180.dp).height(130.dp)) { Column(Modifier.padding(16.dp)) { Text(tab.title); Spacer(Modifier.weight(1f)); Text(tab.url, maxLines = 2, color = MaterialTheme.colorScheme.onSurfaceVariant) } } } } }
+    val groups by model.groups.collectAsState()
+    var showGroupDialog by remember { mutableStateOf(false) }
+    Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).padding(top = 20.dp)) {
+        Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp), verticalAlignment = Alignment.CenterVertically) { TextButton(onClick = onBack) { Text("‹ back") }; Text("tabs", style = MaterialTheme.typography.headlineSmall, modifier = Modifier.weight(1f)); TextButton(onClick = { model.addTab(); onBack() }) { Text("+ new") } }
+        Text("tab groups", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp))
+        LazyRow(Modifier.fillMaxWidth().padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) { items(groups, key = { it.id }) { group -> Surface(onClick = {}, shape = RoundedCornerShape(50), color = MaterialTheme.colorScheme.surface, border = BorderStroke(1.dp, Color(group.color))) { Text(group.name, modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp)) } }; item { Surface(onClick = { showGroupDialog = true }, shape = RoundedCornerShape(50), color = MaterialTheme.colorScheme.primaryContainer) { Text("+ new group", modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp)) } } }
+        Text("tabs", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(20.dp))
+        LazyRow(Modifier.padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) { items(tabs, key = { it.id }) { tab -> Surface(onClick = { model.select(tab.id); onBack() }, shape = RoundedCornerShape(18.dp), color = if (tab.id == activeId) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface, modifier = Modifier.width(180.dp).height(130.dp)) { Column(Modifier.padding(16.dp)) { Text(tab.title); Spacer(Modifier.weight(1f)); Text(tab.url, maxLines = 2, color = MaterialTheme.colorScheme.onSurfaceVariant) } } } }
+    }
+    if (showGroupDialog) NameDialog("new group", "group name", { model.addGroup(it); showGroupDialog = false }, { showGroupDialog = false })
 }
 
 @Composable private fun TabActionsDialog(tab: BrowserTab, model: BrowserViewModel, dismiss: () -> Unit) {
@@ -123,3 +133,26 @@ class BrowserActivity : ComponentActivity() {
 @Composable private fun Action(label: String, click: () -> Unit) { Button(onClick = click, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(14.dp)) { Text(label, modifier = Modifier.fillMaxWidth()) } }
 
 private fun String.toDestination(): String = if (startsWith("http://") || startsWith("https://")) this else if (contains(".") && !contains(" ")) "https://$this" else "https://www.google.com/search?q=${java.net.URLEncoder.encode(this, "UTF-8") }"
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable private fun ProfileSheet(model: BrowserViewModel, dismiss: () -> Unit) {
+    val profiles by model.profiles.collectAsState()
+    val current by model.profileId.collectAsState()
+    var showCreate by remember { mutableStateOf(false) }
+    ModalBottomSheet(onDismissRequest = dismiss) {
+        Text("profiles", style = MaterialTheme.typography.headlineSmall, modifier = Modifier.padding(20.dp))
+        profiles.forEach { profile ->
+            Surface(onClick = { model.switchProfile(profile.id); dismiss() }, shape = RoundedCornerShape(14.dp), color = if (profile.id == current) MaterialTheme.colorScheme.primaryContainer else Color.Transparent, modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp)) {
+                Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) { Text(profile.icon, color = Color(profile.color)); Spacer(Modifier.width(12.dp)); Text(profile.name); if (profile.isDefault) { Spacer(Modifier.weight(1f)); Text("default", color = MaterialTheme.colorScheme.onSurfaceVariant) } }
+            }
+        }
+        TextButton(onClick = { showCreate = true }, modifier = Modifier.padding(16.dp)) { Text("+ create profile") }
+        Spacer(Modifier.navigationBarsPadding())
+    }
+    if (showCreate) NameDialog("create profile", "profile name", { model.addProfile(it); showCreate = false }, { showCreate = false })
+}
+
+@Composable private fun NameDialog(title: String, label: String, save: (String) -> Unit, dismiss: () -> Unit) {
+    var name by remember { mutableStateOf("") }
+    AlertDialog(onDismissRequest = dismiss, title = { Text(title) }, text = { OutlinedTextField(value = name, onValueChange = { name = it }, label = { Text(label) }, singleLine = true) }, dismissButton = { TextButton(onClick = dismiss) { Text("cancel") } }, confirmButton = { TextButton(onClick = { save(name) }) { Text("create") } })
+}
