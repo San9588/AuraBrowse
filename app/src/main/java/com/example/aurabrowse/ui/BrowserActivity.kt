@@ -158,9 +158,10 @@ class BrowserActivity : ComponentActivity() {
 }
 
 @Composable private fun TabActionsDialog(tab: BrowserTab, model: BrowserViewModel, dismiss: () -> Unit) {
+    val context = LocalContext.current
     val groups by model.groups.collectAsState()
     var choosingGroup by remember { mutableStateOf(false) }
-    AlertDialog(onDismissRequest = dismiss, title = { Text(tab.title) }, text = { Column(verticalArrangement = Arrangement.spacedBy(8.dp)) { Action("↗  move to profile") {}; Action("□  open in profile") {}; Action("⊞  add to group") { choosingGroup = true }; if (tab.groupId != null) Action("−  remove from group") { model.assignToGroup(tab.id, null); dismiss() }; Action("⌑  pin tab") {}; Action("♧  share") {}; Action("♡  bookmark") { model.bookmarkActive(); dismiss() }; Action("⟳  refresh") {}; Action("×  close tab") { model.close(tab.id); dismiss() } } }, confirmButton = { TextButton(onClick = dismiss) { Text("done") } })
+    AlertDialog(onDismissRequest = dismiss, title = { Text(tab.title) }, text = { Column(verticalArrangement = Arrangement.spacedBy(8.dp)) { Action("↗  move to profile") {}; Action("□  open in profile") {}; Action("⊞  add to group") { choosingGroup = true }; if (tab.groupId != null) Action("−  remove from group") { model.assignToGroup(tab.id, null); dismiss() }; Action("⌑  pin tab") {}; Action("♧  share") {}; Action("♡  bookmark") { model.bookmarkActive(); dismiss() }; Action("⟳  refresh") {}; Action("▣  developer tools") { context.startActivity(Intent(context, DevToolsActivity::class.java)); dismiss() }; Action("×  close tab") { model.close(tab.id); dismiss() } } }, confirmButton = { TextButton(onClick = dismiss) { Text("done") } })
     if (choosingGroup) {
         AlertDialog(onDismissRequest = { choosingGroup = false }, title = { Text("add to group") }, text = { Column(verticalArrangement = Arrangement.spacedBy(6.dp)) { if (groups.isEmpty()) Text("create a group first") else groups.forEach { group -> TextButton(onClick = { model.assignToGroup(tab.id, group.id); choosingGroup = false; dismiss() }, modifier = Modifier.fillMaxWidth()) { Text(group.name, modifier = Modifier.fillMaxWidth()) } } } }, confirmButton = { TextButton(onClick = { choosingGroup = false }) { Text("cancel") } })
     }
