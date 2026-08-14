@@ -40,19 +40,28 @@ class CdpClient(
 
     companion object {
         private const val TAG = "AuraCdp"
+        @Volatile private var globalConnecting = false
     }
 
     fun connect(wsUrl: String? = null) {
+        if (globalConnecting) {
+            Log.d(TAG, "connect ignored (already connecting)")
+            return
+        }
         close()
+        globalConnecting = true
         val g = gen.incrementAndGet()
         Thread({
+            var sock: LocalSocket? = null
             try {
                 val target = wsUrl ?: discoverDefaultWsUrl()
                 if (target.isNullOrBlank()) throw IOException("no debuggable page (is WebView debugging enabled?)")
                 Log.d(TAG, "connect target=$target")
-                val sock = openSocket()
-                val (input, output) = websocketUpgrade(sock, target)
+                sock = openSocket()
                 socket = sock
+                sock.soTimeout = 3000
+                val (input, output) = websocketUpgrade(sock, target)
+                sock.soTimeout = 0
                 out = output
                 connected = true
                 main.post { if (g == gen.get()) onState(true) }
@@ -60,11 +69,12 @@ class CdpClient(
                 readLoop(sock, input, g)
             } catch (e: Exception) {
                 Log.e(TAG, "connect failed: ${e.message}", e)
-                runCatching { socket?.close() }
+                runCatching { sock?.close() }
                 if (g == gen.get()) {
                     socket = null
                     out = null
                     connected = false
+                    globalConnecting = false
                     main.post { onState(false) }
                 }
             }
@@ -99,6 +109,7 @@ class CdpClient(
 
     fun close() {
         gen.incrementAndGet()
+        globalConnecting = false
         runCatching { socket?.close() }
         socket = null
         out = null
@@ -131,6 +142,7 @@ class CdpClient(
             }
         } catch (_: Exception) {
         } finally {
+            globalConnecting = false
             if (g == gen.get() && connected) {
                 connected = false
                 main.post { onState(false) }
@@ -185,12 +197,12 @@ class CdpClient(
     private fun websocketUpgrade(sock: LocalSocket, wsUrl: String): Pair<InputStream, OutputStream> {
         val path = runCatching { Uri.parse(wsUrl).path }.getOrNull() ?: "/devtools/page/1"
         val key = ByteArray(16).also { SecureRandom().nextBytes(it) }.let { Base64.encodeToString(it, Base64.NO_WRAP) }
-        val request = "GET $path HTTP/1.1\r\nHost: localhost\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Key: $key\r\nSec-WebSocket-Version: 13\r\n\r\n"
+        val request = "GET $path HTTP/1.1\r\nHost: localhost\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nOrigin: http://localhost\r\nSec-WebSocket-Key: $key\r\nSec-WebSocket-Version: 13\r\n\r\n"
         val outStream = sock.outputStream
         outStream.write(request.toByteArray(Charsets.UTF_8))
         outStream.flush()
         val response = readUntil(sock.inputStream, "\r\n\r\n")
-        if (!response.startsWith("HTTP/1.1 101")) throw IOException("upgrade failed: $response")
+        if (!response.startsWith("HTTP/1.1 101")) throw IOException("upgrade failed: ${response.take(80)}")
         return Pair(sock.inputStream, outStream)
     }
 

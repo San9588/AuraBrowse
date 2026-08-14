@@ -32,7 +32,12 @@ class CookieStore(private val dao: BrowserDao) {
         }
         cm.flush()
         for (cookie in dao.cookiesForProfile(to)) {
-            cm.setCookie("https://${cookie.domain}/", cookie.value)
+            val url = "https://${cookie.domain}/"
+            cookie.value.split("; ").forEach { pair ->
+                val name = pair.substringBefore("=").trim()
+                val value = pair.substringAfter("=", "").trim()
+                if (name.isNotBlank() && value.isNotBlank()) cm.setCookie(url, "$name=$value")
+            }
         }
         cm.flush()
     }

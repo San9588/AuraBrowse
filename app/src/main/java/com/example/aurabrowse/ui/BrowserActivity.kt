@@ -11,9 +11,10 @@ import android.os.Build
 import android.os.Bundle
 import android.webkit.WebView
 import androidx.activity.ComponentActivity
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.OnBackPressedCallback
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.compose.foundation.*
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
@@ -84,14 +85,16 @@ class BrowserActivity : ComponentActivity() {
             if (tabId == model.activeId.value) address = url
         }, { tabId, p -> progressByTab[tabId] = p }, { model.addTab() }).also(onPoolCreated)
     }
+    val profileId by model.profileId.collectAsState()
     LaunchedEffect(Unit) { model.closedTabs.collect { id -> pool.close(id); progressByTab.remove(id) } }
     DisposableEffect(Unit) { onDispose { onPoolDisposed(); pool.destroy() } }
+    val switchProfile: (String) -> Unit = { id -> pool.destroy(); model.switchProfile(id) }
     val open: (String) -> Unit = { raw -> val url = raw.toDestination(searchEngine); address = url; model.navigate(url); progressByTab[activeId] = 0; pool.load(activeId, url) }
 
     if (showTabPage) {
-        TabPage(tabs, activeId, model, onBack = { showTabPage = false }, onDialog = { dialogTab = it })
-    } else {
-        Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
+        BackHandler { showTabPage = false; model.navigate("about:home") }
+        TabPage(tabs, activeId, model, onBack = { showTabPage = false }, onDialog = { dialogTab = it }, switchProfile = switchProfile)
+    } else {        Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
             if (active.url == "about:home") {
                 HomePage(address, Modifier.weight(1f), { address = it }, { open(it) }, { context.startActivity(Intent(context, SettingsActivity::class.java)) })
             } else if (active.url == "about:devtools") {
@@ -99,7 +102,7 @@ class BrowserActivity : ComponentActivity() {
             } else {
                 Omnibox(address, { address = it }, { open(address) }, { pool.reload(activeId) })
                 if (progress in 1..99) LinearProgressIndicator({ progress / 100f }, Modifier.fillMaxWidth().height(1.dp))
-                key(activeId) {
+                key(activeId, profileId) {
                     AndroidView(factory = { pool.get(activeId) }, modifier = Modifier.weight(1f), update = { wv ->
                         val target = active.url
                         if (!pool.hasContent(activeId) && target != "about:home" && target != "about:devtools" && target.isNotBlank()) pool.load(activeId, target)
@@ -110,7 +113,7 @@ class BrowserActivity : ComponentActivity() {
             BottomBar(activeId, tabs.size, { if (tabs.size > 1) model.close(activeId) }, { showTabPage = true }, { model.bookmarkActive() }, { context.startActivity(Intent(context, SettingsActivity::class.java)) })
         }
     }
-    if (showProfiles) ProfileSheet(model, { showProfiles = false })
+    if (showProfiles) ProfileSheet(model, switchProfile, { showProfiles = false })
     dialogTab?.let { tab -> TabActionsDialog(tab, model, onRefresh = { pool.reload(tab.id) }, dismiss = { dialogTab = null }) }
 }
 
@@ -163,7 +166,7 @@ class BrowserActivity : ComponentActivity() {
     }
 }
 
-@Composable private fun TabPage(tabs: List<BrowserTab>, activeId: String, model: BrowserViewModel, onBack: () -> Unit, onDialog: (BrowserTab) -> Unit) {
+@Composable private fun TabPage(tabs: List<BrowserTab>, activeId: String, model: BrowserViewModel, onBack: () -> Unit, onDialog: (BrowserTab) -> Unit, switchProfile: (String) -> Unit) {
     val context = LocalContext.current
     val settings = remember { Settings(context) }
     val groups by model.groups.collectAsState()
@@ -186,13 +189,13 @@ class BrowserActivity : ComponentActivity() {
         Text("profile", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp))
         LazyRow(Modifier.fillMaxWidth().padding(horizontal = 16.dp).navigationBarsPadding(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             items(profiles, key = { it.id }) { profile ->
-                Surface(onClick = { model.switchProfile(profile.id); showProfiles = false }, shape = RoundedCornerShape(50), color = if (profile.id == currentProfile) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surface, border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)) { Text(profile.name, color = if (profile.id == currentProfile) Color.White else MaterialTheme.colorScheme.onSurface, maxLines = 1, modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) }
+                Surface(onClick = { switchProfile(profile.id); showProfiles = false }, shape = RoundedCornerShape(50), color = if (profile.id == currentProfile) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surface, border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)) { Text(profile.name, color = if (profile.id == currentProfile) Color.White else MaterialTheme.colorScheme.onSurface, maxLines = 1, modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) }
             }
             item { Surface(onClick = { showProfiles = true }, shape = RoundedCornerShape(50), color = MaterialTheme.colorScheme.primaryContainer) { Text("manage", modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) } }
         }
     }
     if (showGroupDialog) NameDialog("new group", "group name", { model.addGroup(it); showGroupDialog = false }, { showGroupDialog = false })
-    if (showProfiles) ProfileSheet(model, { showProfiles = false })
+    if (showProfiles) ProfileSheet(model, switchProfile, { showProfiles = false })
 }
 
 @Composable private fun TabActionsDialog(tab: BrowserTab, model: BrowserViewModel, onRefresh: () -> Unit, dismiss: () -> Unit) {
@@ -281,14 +284,14 @@ private fun String.toDestination(searchEngine: String = "duckduckgo"): String = 
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
-@Composable private fun ProfileSheet(model: BrowserViewModel, dismiss: () -> Unit) {
+@Composable private fun ProfileSheet(model: BrowserViewModel, switchProfile: (String) -> Unit, dismiss: () -> Unit) {
     val profiles by model.profiles.collectAsState()
     val current by model.profileId.collectAsState()
     var showCreate by remember { mutableStateOf(false) }
     ModalBottomSheet(onDismissRequest = dismiss) {
         Text("profiles", style = MaterialTheme.typography.headlineSmall, modifier = Modifier.padding(20.dp))
         profiles.forEach { profile ->
-            Surface(onClick = { model.switchProfile(profile.id); dismiss() }, shape = RoundedCornerShape(14.dp), color = if (profile.id == current) MaterialTheme.colorScheme.primaryContainer else Color.Transparent, modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp)) {
+            Surface(onClick = { switchProfile(profile.id); dismiss() }, shape = RoundedCornerShape(14.dp), color = if (profile.id == current) MaterialTheme.colorScheme.primaryContainer else Color.Transparent, modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp)) {
                 Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) { Text(profile.icon, color = Color(profile.color)); Spacer(Modifier.width(12.dp)); Text(profile.name); Spacer(Modifier.weight(1f)); if (profile.isDefault) Text("default", color = MaterialTheme.colorScheme.onSurfaceVariant) else if (profile.id != current) TextButton(onClick = { model.deleteProfile(profile) }) { Text("delete") } }
             }
         }

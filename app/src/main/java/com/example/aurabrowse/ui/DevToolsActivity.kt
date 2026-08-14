@@ -48,19 +48,27 @@ private val mainHandler = Handler(Looper.getMainLooper())
             onState = { ok -> connected = ok; status = if (ok) "connected" else "offline" }
         )
     }
+    var connecting by remember { mutableStateOf(false) }
     fun doConnect() {
+        if (connecting) return
+        connecting = true
         Thread({
-            val pages = cdp.listPages()
-            val first = pages.firstOrNull()
-            mainHandler.post {
-                if (first != null) {
-                    pageTitle = first.title.ifBlank { first.url }
-                    status = "connecting…"
-                    cdp.connect(first.wsUrl)
-                } else {
-                    pageTitle = "no debuggable page"
-                    status = "offline (enable dev tools in settings, then restart app)"
+            try {
+                val pages = cdp.listPages()
+                val first = pages.firstOrNull()
+                mainHandler.post {
+                    if (first != null) {
+                        pageTitle = first.title.ifBlank { first.url }
+                        status = "connecting…"
+                        cdp.connect(first.wsUrl)
+                    } else {
+                        pageTitle = "no debuggable page"
+                        status = "offline (enable dev tools in settings, then restart app)"
+                    }
+                    connecting = false
                 }
+            } catch (e: Exception) {
+                mainHandler.post { connecting = false }
             }
         }, "cdp-list").start()
     }

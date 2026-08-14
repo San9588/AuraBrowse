@@ -11,9 +11,10 @@ import kotlinx.coroutines.flow.onStart
 class Settings(context: Context) {
     private val prefs: SharedPreferences = context.applicationContext.getSharedPreferences("settings", Context.MODE_PRIVATE)
     private val changes = MutableSharedFlow<String>(extraBufferCapacity = 16)
+    private val listener = SharedPreferences.OnSharedPreferenceChangeListener { _, key -> key?.let { changes.tryEmit(it) } }
 
     init {
-        prefs.registerOnSharedPreferenceChangeListener { _, key -> key?.let { changes.tryEmit(it) } }
+        prefs.registerOnSharedPreferenceChangeListener(listener)
     }
 
     fun stringFlow(key: String, default: String): Flow<String> = changes

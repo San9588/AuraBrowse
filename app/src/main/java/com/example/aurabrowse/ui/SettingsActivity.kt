@@ -19,7 +19,7 @@ import kotlinx.coroutines.launch
 class SettingsActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContent { AuraBrowseTheme { SettingsContent(Settings(this)) } }
+        setContent { AuraBrowseTheme { SettingsContent(remember { Settings(this) }) } }
     }
 }
 
