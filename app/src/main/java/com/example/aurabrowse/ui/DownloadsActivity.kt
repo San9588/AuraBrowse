@@ -5,6 +5,7 @@ import android.content.Context
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -18,5 +19,5 @@ class DownloadsActivity : ComponentActivity() {
     val manager = remember { context.getSystemService(DownloadManager::class.java) }
     var count by remember { mutableIntStateOf(0) }
     LaunchedEffect(Unit) { count = manager.query(DownloadManager.Query()).count }
-    Column(Modifier.fillMaxSize().padding(24.dp).statusBarsPadding()) { Text("downloads", style = MaterialTheme.typography.headlineSmall); Spacer(Modifier.height(16.dp)); Text(if (count == 0) "no downloads yet" else "$count downloads") }
+    Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).padding(24.dp).statusBarsPadding()) { Text("downloads", style = MaterialTheme.typography.headlineSmall); Spacer(Modifier.height(16.dp)); Text(if (count == 0) "no downloads yet" else "$count downloads") }
 }

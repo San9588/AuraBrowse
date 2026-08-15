@@ -5,6 +5,7 @@ import android.os.Handler
 import android.os.Looper
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -76,7 +77,7 @@ private val mainHandler = Handler(Looper.getMainLooper())
         doConnect()
         onDispose { cdp.close() }
     }
-    Column(modifier.fillMaxSize().padding(16.dp).statusBarsPadding()) {
+    Column(modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).padding(16.dp).statusBarsPadding()) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) { Text("developer tools", style = MaterialTheme.typography.headlineSmall); Text(status, color = if (connected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant) }
         Spacer(Modifier.height(12.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {

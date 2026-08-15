@@ -5,6 +5,7 @@ import android.webkit.CookieManager
 import android.webkit.WebViewDatabase
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
@@ -33,7 +34,7 @@ class SettingsActivity : ComponentActivity() {
     var devtools by remember { mutableStateOf(settings.getBoolean("enable_devtools", false)) }
     var searchEngine by remember { mutableStateOf(settings.getString("search_engine", "google")) }
     var js by remember { mutableStateOf(settings.getBoolean("javascript_enabled", true)) }
-    Column(Modifier.fillMaxSize().verticalScroll(androidx.compose.foundation.rememberScrollState()).padding(horizontal = 24.dp, vertical = 20.dp).statusBarsPadding(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+    Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).verticalScroll(androidx.compose.foundation.rememberScrollState()).padding(horizontal = 24.dp, vertical = 20.dp).statusBarsPadding(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Text("settings", style = MaterialTheme.typography.headlineSmall)
         Spacer(Modifier.height(18.dp))
         SectionTitle("general")

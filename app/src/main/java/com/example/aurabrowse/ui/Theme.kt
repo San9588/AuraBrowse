@@ -1,5 +1,6 @@
 package com.example.aurabrowse.ui
 
+import android.app.Activity
 import android.os.Build
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.ColorScheme
@@ -7,12 +8,16 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.dynamicDarkColorScheme
 import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalView
+import androidx.core.view.WindowCompat
 import com.example.aurabrowse.core.Settings
 
 data class AccentOption(val id: String, val label: String, val seed: Color)
@@ -30,6 +35,7 @@ val AccentOptions = listOf(
 @Composable
 fun AuraBrowseTheme(content: @Composable () -> Unit) {
     val context = LocalContext.current
+    val view = LocalView.current
     val settings = remember { Settings(context) }
     val themePref by settings.theme.collectAsState(initial = "system")
     val accentPref by settings.accent.collectAsState(initial = "blue")
@@ -43,6 +49,17 @@ fun AuraBrowseTheme(content: @Composable () -> Unit) {
         accentPref == "system" && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> if (dark) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
         dark -> accentDarkScheme(seed)
         else -> accentLightScheme(seed)
+    }
+    val activity = context as? Activity
+    if (activity != null && !view.isInEditMode) {
+        SideEffect {
+            activity.window.statusBarColor = colors.background.toArgb()
+            activity.window.navigationBarColor = colors.surface.toArgb()
+            WindowCompat.getInsetsController(activity.window, view).apply {
+                isAppearanceLightStatusBars = !dark
+                isAppearanceLightNavigationBars = !dark
+            }
+        }
     }
     MaterialTheme(colorScheme = colors, content = content)
 }
