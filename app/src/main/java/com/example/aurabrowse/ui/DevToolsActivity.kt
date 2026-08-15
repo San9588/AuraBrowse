@@ -3,6 +3,7 @@ package com.example.aurabrowse.ui
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.webkit.WebView
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.background
@@ -13,8 +14,10 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.example.aurabrowse.core.CdpClient
+import kotlinx.coroutines.delay
 import org.json.JSONObject
 
 class DevToolsActivity : ComponentActivity() {
@@ -36,6 +39,7 @@ private val mainHandler = Handler(Looper.getMainLooper())
     var status by remember { mutableStateOf("offline") }
     val console = remember { mutableStateListOf<DevtoolsLog>() }
     val network = remember { mutableStateListOf<DevtoolsLog>() }
+    val context = LocalContext.current
     val cdp = remember {
         CdpClient(
             onEvent = { method, params ->
@@ -74,8 +78,17 @@ private val mainHandler = Handler(Looper.getMainLooper())
         }, "cdp-list").start()
     }
     DisposableEffect(Unit) {
-        doConnect()
-        onDispose { cdp.close() }
+        val socketForcer = WebView(context).apply { loadUrl("about:blank") }
+        onDispose {
+            cdp.close()
+            runCatching { socketForcer.destroy() }
+        }
+    }
+    LaunchedEffect(Unit) {
+        while (!connected) {
+            doConnect()
+            delay(2000)
+        }
     }
     Column(modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).padding(16.dp).statusBarsPadding()) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) { Text("developer tools", style = MaterialTheme.typography.headlineSmall); Text(status, color = if (connected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant) }
