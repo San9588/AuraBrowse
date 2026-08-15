@@ -138,7 +138,7 @@ class BrowserActivity : ComponentActivity() {
 }
 
 @Composable private fun Shortcut(title: String, host: String, open: (String) -> Unit) {
-    Surface(onClick = { open(host) }, shape = RoundedCornerShape(18.dp), color = MaterialTheme.colorScheme.surface, border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant), modifier = Modifier.width(82.dp)) { Column(Modifier.padding(vertical = 12.dp).fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) { Box(Modifier.size(38.dp).background(Color(0xFF1A1A1A), RoundedCornerShape(12.dp))); Spacer(Modifier.height(8.dp)); Text(title, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1) } }
+    Surface(onClick = { open(host) }, shape = RoundedCornerShape(18.dp), color = MaterialTheme.colorScheme.surface, border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant), modifier = Modifier.width(82.dp)) { Column(Modifier.padding(vertical = 12.dp).fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) { Box(Modifier.size(38.dp).background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(12.dp))); Spacer(Modifier.height(8.dp)); Text(title, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1) } }
 }
 
 @Composable private fun Omnibox(value: String, onValue: (String) -> Unit, submit: () -> Unit, refresh: () -> Unit) {
@@ -149,7 +149,7 @@ class BrowserActivity : ComponentActivity() {
     LazyRow(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         items(tabs, key = { it.id }) { tab ->
             val gesture = Modifier.pointerInput(tab.id) { detectVerticalDragGestures(onVerticalDrag = { _, drag -> if (drag < -12) model.close(tab.id); if (drag > 12) onDialog(tab) }) }
-            Surface(onClick = { model.select(tab.id) }, shape = RoundedCornerShape(50), color = if (tab.id == activeId) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surface, border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant), modifier = gesture.widthIn(max = 148.dp)) { Text(if (tab.url == "about:home") "New tab" else tab.title.ifBlank { "New page" }, color = if (tab.id == activeId) Color.White else MaterialTheme.colorScheme.onSurface, maxLines = 1, modifier = Modifier.padding(horizontal = 11.dp, vertical = 9.dp)) }
+            Surface(onClick = { model.select(tab.id) }, shape = RoundedCornerShape(50), color = if (tab.id == activeId) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surface, border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant), modifier = gesture.widthIn(max = 148.dp)) { Text(if (tab.url == "about:home") "New tab" else tab.title.ifBlank { "New page" }, color = if (tab.id == activeId) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface, maxLines = 1, modifier = Modifier.padding(horizontal = 11.dp, vertical = 9.dp)) }
         }
     }
 }
@@ -189,7 +189,7 @@ class BrowserActivity : ComponentActivity() {
         Text("profile", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp))
         LazyRow(Modifier.fillMaxWidth().padding(horizontal = 16.dp).navigationBarsPadding(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             items(profiles, key = { it.id }) { profile ->
-                Surface(onClick = { switchProfile(profile.id); showProfiles = false }, shape = RoundedCornerShape(50), color = if (profile.id == currentProfile) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surface, border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)) { Text(profile.name, color = if (profile.id == currentProfile) Color.White else MaterialTheme.colorScheme.onSurface, maxLines = 1, modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) }
+                Surface(onClick = { switchProfile(profile.id); showProfiles = false }, shape = RoundedCornerShape(50), color = if (profile.id == currentProfile) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surface, border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)) { Text(profile.name, color = if (profile.id == currentProfile) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface, maxLines = 1, modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) }
             }
             item { Surface(onClick = { showProfiles = true }, shape = RoundedCornerShape(50), color = MaterialTheme.colorScheme.primaryContainer) { Text("manage", modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) } }
         }
